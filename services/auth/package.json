@@ -1,38 +1,56 @@
 {
-  "name": "auth",
+  "name": "@hireheaven/auth",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "npm install &&tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\" "
+    "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\"",
+    "migrate:up": "node scripts/migrate.mjs up",
+    "migrate:down": "node scripts/migrate.mjs down",
+    "lint": "eslint src migrations scripts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@hireheaven/shared": "1.0.0",
     "axios": "^1.16.1",
     "bcrypt": "^6.0.0",
-    "concurrently": "^10.0.0",
-    "datauri": "^4.1.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "kafkajs": "^2.2.4",
     "multer": "^2.1.1",
-    "redis": "^6.0.0"
+    "node-pg-migrate": "^7.9.1",
+    "pg": "^8.16.0",
+    "rate-limit-redis": "^4.2.0",
+    "redis": "^6.0.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/cookie-parser": "^1.4.9",
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.1.0",
+    "@types/pg": "^8.15.4",
+    "@types/node": "^22.15.30",
+    "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.14",
-    "typescript": "^6.0.3"
+    "supertest": "^7.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
   }
 }

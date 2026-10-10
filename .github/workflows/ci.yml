@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hireheaven_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hireheaven_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: silent
+      DB_URL: postgres://postgres:postgres@localhost:5432/hireheaven_test
+      REDIS_URL: redis://localhost:6379
+      KAFKA_BROKER: localhost:9092
+      JWT_SEC: ci-access-token-secret-at-least-32-characters
+      RESET_JWT_SEC: ci-reset-token-secret-at-least-32-characters
+      REFRESH_JWT_SEC: ci-refresh-token-secret-at-least-32-characters
+      EMAIL_VERIFY_JWT_SEC: ci-email-verify-secret-at-least-32-characters
+      INTERNAL_API_KEY: ci-internal-api-key-at-least-32-characters
+      GATEWAY_INTERNAL_KEY: ci-gateway-key-at-least-32-characters
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+      UPLOAD_SERVICE: http://localhost:5001
+      JOB_SERVICE_URL: http://localhost:5003
+      AUTH_SERVICE_URL: http://localhost:5000
+      SMTP_HOST: localhost
+      SMTP_PORT: "1025"
+      SMTP_USER: ci
+      SMTP_PASS: ci
+      EMAIL_FROM: ci@example.test
+      CLOUDINARY_CLOUD_NAME: ci
+      CLOUDINARY_API_KEY: ci
+      CLOUDINARY_API_SECRET: ci
+      NEXT_PUBLIC_GATEWAY_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install workspace dependencies
+        run: npm install --no-audit --no-fund
+        env:
+          HUSKY: "0"
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build

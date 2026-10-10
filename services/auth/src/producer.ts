@@ -1,75 +1,63 @@
+import {
+  createLogger,
+  createProducer,
+  KAFKA_TOPICS,
+  type KafkaTopic,
+  type SharedProducer,
+} from "@hireheaven/shared";
 import { Kafka } from "kafkajs";
-import type { Admin, Producer } from "kafkajs";
-import dotenv from "dotenv";
+import { env } from "./config/env.js";
 
-dotenv.config();
+const logger = createLogger({ level: env.LOG_LEVEL });
+let producer: SharedProducer | undefined;
 
-let producer: Producer;
-let admin: Admin;
+export const connectKafka = async (): Promise<void> => {
+  const kafkaConfig = {
+    clientId: "auth-service",
+    brokers: env.KAFKA_BROKER,
+  };
+  const kafka = new Kafka(kafkaConfig);
+  const admin = kafka.admin();
+  await admin.connect();
+  try {
+    await admin.createTopics({
+      topics: [
+        ...Object.values(KAFKA_TOPICS).map((topic) => ({
+          topic,
+          numPartitions: 1,
+          replicationFactor: 1,
+        })),
+        ...Object.values(KAFKA_TOPICS).map((topic) => ({
+          topic: `${topic}.dlq`,
+          numPartitions: 1,
+          replicationFactor: 1,
+        })),
+      ],
+    });
+  } finally {
+    await admin.disconnect();
+  }
 
-export const connectKafka = async () => {
-    try {
-        const kafka = new Kafka({
-            clientId: "auth-service",
-            brokers: [
-                process.env.KAFKA_BROKER || "localhost:9092"
-            ],
-        });
-
-        admin = kafka.admin();
-        await admin.connect();
-
-        await admin.createTopics({
-            topics: [
-                {
-                    topic: "send-mail",
-                    numPartitions: 1,
-                    replicationFactor: 1,
-                },
-            ],
-        });
-
-        await admin.disconnect();
-
-        producer = kafka.producer();
-        await producer.connect();
-
-        console.log("Connected to Kafka producer");
-    } catch (error) {
-        console.log("Failed to connect Kafka", error);
-    }
+  producer = await createProducer({ kafka: kafkaConfig });
+  logger.info("connected to Kafka producer");
 };
 
 export const publishToTopic = async (
-    topic: string,
-    message: any
-) => {
-    if (!producer) {
-        console.log("Kafka producer is not initialized");
-        return;
-    }
-
-    try {
-        await producer.send({
-            topic,
-            messages: [
-                {
-                    value: JSON.stringify(message),
-                },
-            ],
-        });
-
-        console.log("Message published successfully");
-    } catch (error) {
-        console.log(
-            "Failed to publish message to Kafka",
-            error
-        );
-    }
+  topic: KafkaTopic,
+  message: object,
+): Promise<void> => {
+  if (!producer) {
+    throw new Error("Kafka producer is not initialized");
+  }
+  const eventId = "eventId" in message && typeof message.eventId === "string"
+    ? message.eventId
+    : undefined;
+  await producer.publish(topic, message, eventId);
 };
 
-export const disconnectKafka = async () => {
-    if (producer) {
-        await producer.disconnect();
-    }
+export const disconnectKafka = async (): Promise<void> => {
+  if (producer) {
+    await producer.disconnect();
+    producer = undefined;
+  }
 };

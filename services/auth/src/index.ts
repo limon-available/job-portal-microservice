@@ -1,69 +1,61 @@
+import type { Server } from "node:http";
 import app from "./app.js";
-import dotenv from "dotenv";
-import { sql } from "./utils/db.js";
-import { UnsafeRawSql } from "@neondatabase/serverless";
-import {createClient} from "redis";
-dotenv.config();
-export const redisClient=createClient({
-    url:process.env.Redis_url as string,
-});
-redisClient.connect()
-.then(()=>console.log("connected to redis"))
-.catch(console.error);
-async function initDb(){
-    try{
-      await sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-         SELECT 1 FROM pg_type WHERE typname = 'user_role'
-         ) THEN
-            CREATE Type user_role AS ENUM('jobseeker','recruiter');
-        END IF;
-      END$$;      
-      `
-      await sql`
-      CREATE TABLE IF NOT EXISTS users(
-      user_id SERIAL PRIMARY KEY,
-      name VARCHAR(255)NOT NULL,
-      email VARCHAR(255)NOT NULL,
-      password VARCHAR(255)NOT NULL,
-      phone_number VARCHAR(20)NOT NULL,
-      role user_role NOT NULL,
-      bio TEXT,
-      resume VARCHAR(255),
-      resume_public_id VARCHAR(255),
-      profile_pic VARCHAR(255),
-      profile_pic_public_id VARCHAR(255),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      subscription TIMESTAMPTZ
-      )
-      `;
-      await sql `
-      CREATE TABLE IF NOT EXISTS skills(
-      skill_id SERIAL PRIMARY KEY,
-      name VARCHAR(100) NOT NULL UNIQUE
+import { env } from "./config/env.js";
+import { connectKafka, disconnectKafka } from "./producer.js";
+import { createLogger, shutdownTelemetry, startTelemetry } from "@hireheaven/shared";
+import { redisClient } from "./utils/redis.js";
 
-      )
-      `;
-      await sql `
-      CREATE TABLE IF NOT EXISTS user_skills(
-      user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-      skill_id INTEGER NOT NULL REFERENCES skills(skill_id) ON DELETE CASCADE,
-      PRIMARY KEY(user_id,skill_id)
+const logger = createLogger({ level: env.LOG_LEVEL });
+let server: Server | undefined;
+let shutdownPromise: Promise<void> | undefined;
 
-      )
-      `;
-      console.log("database tables checked/created successfully");
-    }catch(error){
-        console.log("Error initialing database",error);
-        process.exit(1);
-    }
+async function start(): Promise<void> {
+  await startTelemetry("auth");
+  await redisClient.connect();
+  await connectKafka();
+  server = app.listen(env.PORT, () => {
+    logger.info({ port: env.PORT }, "auth service is listening");
+  });
 }
-initDb().then(()=>{
-    app.listen(process.env.PORT || 5000, () => {
-    console.log(`Auth Service is running on http:localhost:${process.env.PORT}`);
-})
-})
- 
 
+function shutdown(signal: string): Promise<void> {
+  if (!shutdownPromise) {
+    shutdownPromise = (async () => {
+      logger.info({ signal }, "shutting down auth service");
+      const shutdownErrors: unknown[] = [];
+
+      if (server) {
+        await new Promise<void>((resolve, reject) => {
+          server?.close((error) => error ? reject(error) : resolve());
+        }).catch((error: unknown) => shutdownErrors.push(error));
+      }
+
+      if (redisClient.isOpen) {
+        await redisClient.quit().catch((error: unknown) => shutdownErrors.push(error));
+      }
+      await disconnectKafka().catch((error: unknown) => shutdownErrors.push(error));
+      await shutdownTelemetry().catch((error: unknown) => shutdownErrors.push(error));
+
+      for (const error of shutdownErrors) {
+        logger.error({ err: error }, "error during graceful shutdown");
+      }
+      if (shutdownErrors.length > 0) {
+        process.exitCode = 1;
+      }
+    })();
+  }
+  return shutdownPromise;
+}
+
+process.once("SIGINT", () => {
+  void shutdown("SIGINT");
+});
+process.once("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
+
+void start().catch(async (error: unknown) => {
+  logger.fatal({ err: error }, "failed to start auth service");
+  await shutdown("startup failure");
+  process.exitCode = 1;
+});

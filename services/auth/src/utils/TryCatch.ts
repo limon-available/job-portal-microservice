@@ -1,18 +1,12 @@
-import type { Request,Response,NextFunction,RequestHandler } from "express";
-import ErrorHandler from "./errorHandler.js";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 
-export const TryCatch=(controller:(req:Request,res:Response,next:NextFunction)=>Promise<any>):RequestHandler=>async(req ,res,next)=>{
-try {
-    await controller(req,res,next)
-} catch (error:any) {
-    if(error instanceof ErrorHandler)
-      {
-           res.status(500).json({
-    message:error.message
-        });
-      }
-    return res.status(500).json({
-        message:error.message
-    })  
-}
-}
+type AsyncController = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => Promise<unknown>;
+
+export const TryCatch = (controller: AsyncController): RequestHandler =>
+  (req, res, next) => {
+    void controller(req, res, next).catch(next);
+  };

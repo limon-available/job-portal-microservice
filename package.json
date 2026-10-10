@@ -1,0 +1,57 @@
+{
+  "name": "job-portal-microservice",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/shared",
+    "services/auth",
+    "services/utils",
+    "services/notification",
+    "services/user",
+    "services/job",
+    "services/application",
+    "services/gateway",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run build --workspace @hireheaven/shared && concurrently -k -n gateway,auth,utils,notification,user,job,application,web \"npm run dev --workspace @hireheaven/gateway\" \"npm run dev --workspace @hireheaven/auth\" \"npm run dev --workspace @hireheaven/utils\" \"npm run dev --workspace @hireheaven/notification\" \"npm run dev --workspace @hireheaven/user\" \"npm run dev --workspace @hireheaven/job\" \"npm run dev --workspace @hireheaven/application\" \"npm run dev --workspace @hireheaven/web\"",
+    "up": "docker compose up --build -d",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f --tail=100",
+    "migrate:all": "docker compose build auth notification user job application && docker compose run --rm --no-deps auth npm run migrate:up --workspace @hireheaven/auth && docker compose run --rm --no-deps notification npm run migrate:up --workspace @hireheaven/notification && docker compose run --rm --no-deps user npm run migrate:up --workspace @hireheaven/user && docker compose run --rm --no-deps job npm run migrate:up --workspace @hireheaven/job && docker compose run --rm --no-deps application npm run migrate:up --workspace @hireheaven/application",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "eslint .",
+    "typecheck": "npm run build --workspace @hireheaven/shared && npm run typecheck --workspaces --if-present && tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck tests/e2e/job-application-flow.test.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build --workspace @hireheaven/shared && npm run test --workspaces --if-present",
+    "test:e2e": "vitest run tests/e2e",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@eslint/js": "^9.28.0",
+    "@types/node": "^22.15.30",
+    "concurrently": "^9.2.0",
+    "eslint": "^9.28.0",
+    "globals": "^16.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
+    "prettier": "^3.5.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.34.1"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,tsx,json,md}": [
+      "prettier --write"
+    ],
+    "*.{js,mjs,cjs,ts,tsx}": [
+      "eslint --fix"
+    ]
+  }
+}

@@ -1,4 +1,4 @@
 import { neon } from "@neondatabase/serverless";
-import dotenv from "dotenv"
-dotenv.config();
-export const sql=neon(process.env.DB_URL as string)
+import { env } from "../config/env.js";
+
+export const sql = neon(env.DB_URL);

@@ -1,0 +1,43 @@
+{
+  "name": "@hireheaven/job",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\"",
+    "lint": "eslint src migrations scripts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "migrate:up": "node scripts/migrate.mjs up",
+    "migrate:down": "node scripts/migrate.mjs down"
+  },
+  "dependencies": {
+    "@hireheaven/shared": "1.0.0",
+    "@neondatabase/serverless": "^1.1.0",
+    "axios": "^1.16.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "ioredis": "^5.6.1",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "node-pg-migrate": "^7.9.1",
+    "pg": "^8.16.0",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^22.15.30",
+    "@types/node-cron": "^3.0.11",
+    "@types/supertest": "^6.0.3",
+    "@types/swagger-ui-express": "^4.1.8",
+    "concurrently": "^9.2.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}

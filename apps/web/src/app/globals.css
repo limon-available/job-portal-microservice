@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 36% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 36% 12%;
+  --primary: 160 84% 32%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 210 30% 96%;
+  --muted-foreground: 215 16% 45%;
+  --border: 214 25% 88%;
+}
+
+.dark {
+  --background: 222 36% 9%;
+  --foreground: 210 30% 96%;
+  --card: 222 32% 12%;
+  --card-foreground: 210 30% 96%;
+  --primary: 158 64% 45%;
+  --primary-foreground: 222 36% 9%;
+  --muted: 217 28% 17%;
+  --muted-foreground: 215 18% 68%;
+  --border: 217 24% 23%;
+}
+
+* { @apply border-border; }
+html { scroll-behavior: smooth; }
+body { @apply bg-background text-foreground antialiased; }
+::selection { @apply bg-primary/20; }

@@ -19,7 +19,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "handlebars": "^4.7.8",
-    "node-pg-migrate": "^7.9.1",
+    "node-pg-migrate": "^9.0.0",
     "nodemailer": "^7.0.3",
     "pg": "^8.16.0",
     "redis": "^6.0.0",

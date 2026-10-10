@@ -29,7 +29,7 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.15.30",
-    "@types/supertest": "^6.0.3",
+    "@types/supertest": "^7.2.1",
     "nodemon": "^3.1.14",
     "supertest": "^7.1.1",
     "vitest": "^3.2.4",

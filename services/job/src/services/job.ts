@@ -1,36 +1,41 @@
 import { randomUUID } from "node:crypto";
 import axios from "axios";
 import { AppError, type JobCreated, type JobUpdated } from "@hireheaven/shared";
+import { z } from "zod";
 import { env } from "../config/env.js";
 import * as repository from "../repositories/jobs.js";
-import {
-  publishJobCreated,
-  publishJobDeleted,
-  publishJobUpdated,
-} from "./kafka.js";
+import { publishJobCreated, publishJobDeleted, publishJobUpdated } from "./kafka.js";
 import { queueJobView } from "./views.js";
 import type { CompanyInput, CompanyPatch, JobInput, JobPatch } from "./types.js";
 
-const companyOwnerId = (company: { owner_id: number }): number => Number(company.owner_id);
+const companyOwnerId = (company: unknown): number => {
+  const result = z
+    .object({
+      owner_id: z.coerce.number().int().positive().safe(),
+    })
+    .safeParse(company);
+  if (!result.success) {
+    throw new AppError(500, "Company record has an invalid owner ID", false);
+  }
+  return result.data.owner_id;
+};
 
 export const listCompanies = (userId: number) => repository.listCompanies(userId);
 
 export const createCompany = (userId: number, data: CompanyInput) =>
   repository.createCompany(userId, data);
 
-export const updateCompany = async (
-  userId: number,
-  companyId: number,
-  data: CompanyPatch,
-) => {
+export const updateCompany = async (userId: number, companyId: number, data: CompanyPatch) => {
   const existing = await repository.findCompany(companyId);
-  if (!existing || companyOwnerId(existing) !== userId) throw new AppError(404, "Company not found");
+  if (!existing || companyOwnerId(existing) !== userId)
+    throw new AppError(404, "Company not found");
   return repository.updateCompany(userId, companyId, data);
 };
 
 export const deleteCompany = async (userId: number, companyId: number) => {
   const existing = await repository.findCompany(companyId);
-  if (!existing || companyOwnerId(existing) !== userId) throw new AppError(404, "Company not found");
+  if (!existing || companyOwnerId(existing) !== userId)
+    throw new AppError(404, "Company not found");
   if (await repository.companyHasJobs(companyId)) {
     throw new AppError(409, "Delete or reassign the company's jobs before deleting it");
   }
@@ -55,7 +60,11 @@ export const uploadCompanyLogo = async (
   const company = await repository.findCompany(companyId);
   if (!company || companyOwnerId(company) !== userId) throw new AppError(404, "Company not found");
   const body = new FormData();
-  body.append("file", new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
+  body.append(
+    "file",
+    new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }),
+    file.originalname,
+  );
   body.append("folder", "logos");
   const response = await axios.post<{
     data: { url: string; public_id: string };
@@ -66,7 +75,12 @@ export const uploadCompanyLogo = async (
   if (!uploaded?.url || !uploaded.public_id) {
     throw new AppError(502, "Upload service returned an invalid response", false);
   }
-  const updated = await repository.updateCompanyLogo(userId, companyId, uploaded.url, uploaded.public_id);
+  const updated = await repository.updateCompanyLogo(
+    userId,
+    companyId,
+    uploaded.url,
+    uploaded.public_id,
+  );
   if (!updated) throw new AppError(404, "Company not found");
   if (company.logo_public_id) {
     await axios.delete(
@@ -103,16 +117,21 @@ const toJobCreated = async (job: Record<string, unknown>): Promise<JobCreated> =
 export const createJob = async (userId: number, data: JobInput) => {
   const company = await repository.findCompany(data.companyId);
   if (!company || companyOwnerId(company) !== userId) throw new AppError(404, "Company not found");
-  if (data.status === "open" && data.deadline &&
-    data.deadline < new Date().toISOString().slice(0, 10)) {
+  if (
+    data.status === "open" &&
+    data.deadline &&
+    data.deadline < new Date().toISOString().slice(0, 10)
+  ) {
     throw new AppError(400, "An open job cannot have a past deadline");
   }
   const created = await repository.createJob(userId, data, randomUUID().slice(0, 8));
   if (!created) throw new AppError(400, "Job could not be created");
-  await publishJobCreated(await toJobCreated({
-    ...created,
-    company_name: company.name,
-  }));
+  await publishJobCreated(
+    await toJobCreated({
+      ...created,
+      company_name: company.name,
+    }),
+  );
   return created;
 };
 
@@ -126,13 +145,17 @@ export const updateJob = async (userId: number, jobId: number, data: JobPatch) =
   }
   const nextStatus = data.status ?? String(existing.status);
   const nextDeadline = data.deadline === undefined ? existing.deadline : data.deadline;
-  if (nextStatus === "open" && nextDeadline &&
-    String(nextDeadline) < new Date().toISOString().slice(0, 10)) {
+  if (
+    nextStatus === "open" &&
+    nextDeadline &&
+    String(nextDeadline) < new Date().toISOString().slice(0, 10)
+  ) {
     throw new AppError(400, "An open job cannot have a past deadline");
   }
   if (data.companyId !== undefined) {
     const company = await repository.findCompany(data.companyId);
-    if (!company || companyOwnerId(company) !== userId) throw new AppError(404, "Company not found");
+    if (!company || companyOwnerId(company) !== userId)
+      throw new AppError(404, "Company not found");
   }
   const updated = await repository.updateJob(userId, jobId, data);
   if (!updated) throw new AppError(404, "Job not found");
@@ -156,8 +179,11 @@ export const updateJobStatus = async (
 ) => {
   const existing = await repository.findOwnedJob(userId, jobId);
   if (!existing) throw new AppError(404, "Job not found");
-  if (status === "open" && existing.deadline &&
-    String(existing.deadline) < new Date().toISOString().slice(0, 10)) {
+  if (
+    status === "open" &&
+    existing.deadline &&
+    String(existing.deadline) < new Date().toISOString().slice(0, 10)
+  ) {
     throw new AppError(400, "An expired job cannot be reopened");
   }
   const updated = await repository.updateJobStatus(userId, jobId, status);
@@ -200,8 +226,11 @@ export const searchJobs = async (filters: repository.SearchFilters) => {
 
 export const getPublicJob = async (idOrSlug: string) => {
   const job = await repository.findJob(idOrSlug);
-  if (!job || job.status !== "open" ||
-    (job.deadline && String(job.deadline) < new Date().toISOString().slice(0, 10))) {
+  if (
+    !job ||
+    job.status !== "open" ||
+    (job.deadline && String(job.deadline) < new Date().toISOString().slice(0, 10))
+  ) {
     throw new AppError(404, "Job not found");
   }
   const skills = await repository.listJobSkills(Number(job.job_id));

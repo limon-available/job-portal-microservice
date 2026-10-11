@@ -11,10 +11,11 @@ export const companySchema = z.object({
   location: optionalText(255),
 });
 
-export const companyPatchSchema = companySchema.partial()
+export const companyPatchSchema = companySchema
+  .partial()
   .refine((value) => Object.keys(value).length > 0, "At least one field is required");
 
-export const jobSchema = z.object({
+const jobFieldsSchema = z.object({
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().min(1).max(30000),
   location: z.string().trim().min(1).max(255),
@@ -26,16 +27,28 @@ export const jobSchema = z.object({
   status: z.enum(["draft", "open", "closed"]).default("draft"),
   companyId: positiveId,
   skills: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
-}).refine((job) =>
-  job.salaryMin == null || job.salaryMax == null || job.salaryMin <= job.salaryMax, {
+});
+
+const jobPatchFieldsSchema = jobFieldsSchema.extend({
+  experienceYears: z.number().int().min(0).max(60).optional(),
+  status: z.enum(["draft", "open", "closed"]).optional(),
+  skills: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+});
+
+const validSalaryRange = (job: {
+  salaryMin?: number | null | undefined;
+  salaryMax?: number | null | undefined;
+}) => job.salaryMin == null || job.salaryMax == null || job.salaryMin <= job.salaryMax;
+
+export const jobSchema = jobFieldsSchema.refine(validSalaryRange, {
   message: "salaryMin must not exceed salaryMax",
   path: ["salaryMax"],
 });
 
-export const jobPatchSchema = jobSchema.partial()
+export const jobPatchSchema = jobPatchFieldsSchema
+  .partial()
   .refine((value) => Object.keys(value).length > 0, "At least one field is required")
-  .refine((job) =>
-    job.salaryMin == null || job.salaryMax == null || job.salaryMin <= job.salaryMax, {
+  .refine(validSalaryRange, {
     message: "salaryMin must not exceed salaryMax",
     path: ["salaryMax"],
   });
@@ -45,20 +58,29 @@ export const jobStatusSchema = z.object({
 });
 
 export const jobIdSchema = positiveId;
-export const jobSearchSchema = z.object({
-  keyword: z.string().trim().max(200).optional(),
-  location: z.string().trim().max(255).optional(),
-  jobType: z.enum(["full-time", "part-time", "contract", "internship", "temporary", "remote"]).optional(),
-  salaryMin: z.coerce.number().int().nonnegative().optional(),
-  salaryMax: z.coerce.number().int().nonnegative().optional(),
-  skills: z.union([z.string(), z.array(z.string())]).optional(),
-  sort: z.enum(["newest", "oldest", "salary_asc", "salary_desc"]).default("newest"),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-}).refine((query) =>
-  query.salaryMin === undefined || query.salaryMax === undefined || query.salaryMin <= query.salaryMax, {
-  message: "salaryMin must not exceed salaryMax",
-  path: ["salaryMax"],
-});
+export const jobSearchSchema = z
+  .object({
+    keyword: z.string().trim().max(200).optional(),
+    location: z.string().trim().max(255).optional(),
+    jobType: z
+      .enum(["full-time", "part-time", "contract", "internship", "temporary", "remote"])
+      .optional(),
+    salaryMin: z.coerce.number().int().nonnegative().optional(),
+    salaryMax: z.coerce.number().int().nonnegative().optional(),
+    skills: z.union([z.string(), z.array(z.string())]).optional(),
+    sort: z.enum(["newest", "oldest", "salary_asc", "salary_desc"]).default("newest"),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .refine(
+    (query) =>
+      query.salaryMin === undefined ||
+      query.salaryMax === undefined ||
+      query.salaryMin <= query.salaryMax,
+    {
+      message: "salaryMin must not exceed salaryMax",
+      path: ["salaryMax"],
+    },
+  );
 
 export const idSchema = positiveId;

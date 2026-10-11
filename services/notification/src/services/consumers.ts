@@ -11,7 +11,6 @@ import {
 import type { RedisIdempotencyClient } from "@hireheaven/shared";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { createNotification } from "../repositories/notifications.js";
 import type { NotificationDependencies } from "./eventHandlers.js";
 import { createNotificationHandlers } from "./eventHandlers.js";
 
@@ -69,13 +68,25 @@ export const startConsumers = async (
       ...eventBase,
       jobId: z.string().min(1),
       recruiterId: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+      companyName: z.string(),
       title: z.string().min(1),
       description: z.string(),
-      matchingRecipients: z.array(z.object({
-        userId: z.number().int().positive(),
-        email: z.string().email(),
-        name: z.string().min(1),
-      })).optional(),
+      location: z.string(),
+      jobType: z.string().min(1),
+      salaryMin: z.number().nullable(),
+      salaryMax: z.number().nullable(),
+      skills: z.array(z.string()),
+      deadline: z.string().nullable(),
+      matchingRecipients: z
+        .array(
+          z.object({
+            userId: z.number().int().positive(),
+            email: z.string().email(),
+            name: z.string().min(1),
+          }),
+        )
+        .default([]),
     }),
   };
 
@@ -84,39 +95,50 @@ export const startConsumers = async (
     topic: string,
     schema: z.ZodType<T>,
     handler: (payload: T) => Promise<void>,
-  ): Promise<SharedConsumer> => createConsumer<T>({
-    kafka,
-    consumer: consumerConfig,
-    topic,
-    redis,
-    handler: (payload) => handler(schema.parse(payload)),
-  });
+  ): Promise<SharedConsumer> =>
+    createConsumer<T>({
+      kafka,
+      consumer: consumerConfig,
+      topic,
+      redis,
+      handler: (payload) => handler(schema.parse(payload)),
+    });
   try {
-    consumers.push(await subscribe<UserRegistered>(
-      KAFKA_TOPICS.UserRegistered,
-      eventSchemas.userRegistered,
-      handlers.userRegistered,
-    ));
-    consumers.push(await subscribe<PasswordResetRequested>(
-      KAFKA_TOPICS.PasswordResetRequested,
-      eventSchemas.passwordResetRequested,
-      handlers.passwordResetRequested,
-    ));
-    consumers.push(await subscribe<ApplicationSubmitted>(
-      KAFKA_TOPICS.ApplicationSubmitted,
-      eventSchemas.applicationSubmitted,
-      handlers.applicationSubmitted,
-    ));
-    consumers.push(await subscribe<ApplicationStatusChanged>(
-      KAFKA_TOPICS.ApplicationStatusChanged,
-      eventSchemas.applicationStatusChanged,
-      handlers.applicationStatusChanged,
-    ));
-    consumers.push(await subscribe<JobCreated>(
-      KAFKA_TOPICS.JobCreated,
-      eventSchemas.jobCreated,
-      handlers.jobCreated,
-    ));
+    consumers.push(
+      await subscribe<UserRegistered>(
+        KAFKA_TOPICS.UserRegistered,
+        eventSchemas.userRegistered,
+        handlers.userRegistered,
+      ),
+    );
+    consumers.push(
+      await subscribe<PasswordResetRequested>(
+        KAFKA_TOPICS.PasswordResetRequested,
+        eventSchemas.passwordResetRequested,
+        handlers.passwordResetRequested,
+      ),
+    );
+    consumers.push(
+      await subscribe<ApplicationSubmitted>(
+        KAFKA_TOPICS.ApplicationSubmitted,
+        eventSchemas.applicationSubmitted,
+        handlers.applicationSubmitted,
+      ),
+    );
+    consumers.push(
+      await subscribe<ApplicationStatusChanged>(
+        KAFKA_TOPICS.ApplicationStatusChanged,
+        eventSchemas.applicationStatusChanged,
+        handlers.applicationStatusChanged,
+      ),
+    );
+    consumers.push(
+      await subscribe<JobCreated>(
+        KAFKA_TOPICS.JobCreated,
+        eventSchemas.jobCreated,
+        handlers.jobCreated,
+      ),
+    );
     return consumers;
   } catch (error) {
     await Promise.all(consumers.map((consumer) => consumer.stop()));

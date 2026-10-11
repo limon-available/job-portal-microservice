@@ -8,10 +8,13 @@ const router = express.Router();
 const allowedFiles = new Map([
   [".pdf", new Set(["application/pdf"])],
   [".doc", new Set(["application/msword", "application/x-ole-storage"])],
-  [".docx", new Set([
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/zip",
-  ])],
+  [
+    ".docx",
+    new Set([
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/zip",
+    ]),
+  ],
   [".png", new Set(["image/png"])],
   [".jpg", new Set(["image/jpeg"])],
   [".jpeg", new Set(["image/jpeg"])],
@@ -91,7 +94,8 @@ router.post("/upload", requireInternalKey, upload.single("file"), async (req, re
 
 router.delete("/upload/:publicId", requireInternalKey, async (req, res, next) => {
   try {
-    const { publicId } = req.params;
+    const publicIdParam = req.params.publicId;
+    const publicId = typeof publicIdParam === "string" ? publicIdParam : "";
     if (!publicId) {
       throw new AppError(400, "publicId is required");
     }
@@ -99,9 +103,7 @@ router.delete("/upload/:publicId", requireInternalKey, async (req, res, next) =>
     if (!folders.has(folder)) {
       throw new AppError(400, "folder must be resumes, avatars, or logos");
     }
-    const assetPublicId = publicId.startsWith(`${folder}/`)
-      ? publicId
-      : `${folder}/${publicId}`;
+    const assetPublicId = publicId.startsWith(`${folder}/`) ? publicId : `${folder}/${publicId}`;
     const result = await cloudinary.v2.uploader.destroy(assetPublicId);
     if (result.result !== "ok" && result.result !== "not found") {
       throw new Error(`Cloudinary delete failed: ${result.result}`);

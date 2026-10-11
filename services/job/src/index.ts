@@ -1,6 +1,6 @@
 import "dotenv/config";
 import type { Server } from "node:http";
-import cron from "node-cron";
+import cron, { type ScheduledTask } from "node-cron";
 import { createLogger, shutdownTelemetry, startTelemetry } from "@hireheaven/shared";
 import app from "./app.js";
 import { env } from "./config/env.js";
@@ -12,7 +12,7 @@ const logger = createLogger({ level: env.LOG_LEVEL });
 let server: Server | undefined;
 let shutdownPromise: Promise<void> | undefined;
 let viewFlushTimer: NodeJS.Timeout | undefined;
-let expiryTask: cron.ScheduledTask | undefined;
+let expiryTask: ScheduledTask | undefined;
 let expiryRunning = false;
 
 const shutdown = (signal: string): Promise<void> => {
@@ -24,7 +24,7 @@ const shutdown = (signal: string): Promise<void> => {
       const errors: unknown[] = [];
       if (server) {
         await new Promise<void>((resolve, reject) => {
-          server?.close((error) => error ? reject(error) : resolve());
+          server?.close((error) => (error ? reject(error) : resolve()));
         }).catch((error: unknown) => errors.push(error));
       }
       await flushJobViews().catch((error: unknown) => errors.push(error));

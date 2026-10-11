@@ -23,8 +23,8 @@ const educationFields = z.object({
 });
 
 const validDateRange = (entry: {
-  startDate?: string | null;
-  endDate?: string | null;
+  startDate?: string | null | undefined;
+  endDate?: string | null | undefined;
 }) => !entry.startDate || !entry.endDate || entry.startDate <= entry.endDate;
 
 export const educationCreateSchema = educationFields.refine(validDateRange, {
@@ -32,7 +32,8 @@ export const educationCreateSchema = educationFields.refine(validDateRange, {
   path: ["endDate"],
 });
 
-export const educationUpdateSchema = educationFields.partial()
+export const educationUpdateSchema = educationFields
+  .partial()
   .refine((entry) => Object.keys(entry).length > 0, "At least one field is required")
   .refine(validDateRange, {
     message: "endDate must not be before startDate",
@@ -53,7 +54,8 @@ export const experienceCreateSchema = experienceFields.refine(validDateRange, {
   path: ["endDate"],
 });
 
-export const experienceUpdateSchema = experienceFields.partial()
+export const experienceUpdateSchema = experienceFields
+  .partial()
   .refine((entry) => Object.keys(entry).length > 0, "At least one field is required")
   .refine(validDateRange, {
     message: "endDate must not be before startDate",

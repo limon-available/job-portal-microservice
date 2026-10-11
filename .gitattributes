@@ -1,0 +1,1 @@
+docker/kafka/init-topics.sh text eol=lf

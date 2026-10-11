@@ -1,9 +1,9 @@
 import type { Server } from "node:http";
-import app from "./app.js";
 import { env } from "./config/env.js";
 import { connectKafka, disconnectKafka } from "./producer.js";
 import { createLogger, shutdownTelemetry, startTelemetry } from "@hireheaven/shared";
 import { redisClient } from "./utils/redis.js";
+import { initializeAuthApp } from "./bootstrap.js";
 
 const logger = createLogger({ level: env.LOG_LEVEL });
 let server: Server | undefined;
@@ -11,7 +11,10 @@ let shutdownPromise: Promise<void> | undefined;
 
 async function start(): Promise<void> {
   await startTelemetry("auth");
-  await redisClient.connect();
+  const app = await initializeAuthApp(
+    () => redisClient.connect(),
+    () => import("./app.js"),
+  );
   await connectKafka();
   server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT }, "auth service is listening");
@@ -26,7 +29,7 @@ function shutdown(signal: string): Promise<void> {
 
       if (server) {
         await new Promise<void>((resolve, reject) => {
-          server?.close((error) => error ? reject(error) : resolve());
+          server?.close((error) => (error ? reject(error) : resolve()));
         }).catch((error: unknown) => shutdownErrors.push(error));
       }
 

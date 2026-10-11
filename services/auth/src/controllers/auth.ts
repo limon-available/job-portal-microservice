@@ -20,10 +20,7 @@ import {
 } from "../utils/authTokens.js";
 
 const isUniqueViolation = (error: unknown): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  "code" in error &&
-  error.code === "23505";
+  typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 
 export const registerUser = TryCatch(async (req, res) => {
   const { email, name, password, phoneNumber, role, bio } = req.body;
@@ -51,19 +48,21 @@ export const registerUser = TryCatch(async (req, res) => {
         throw new AppError(400, "Resume file is required for jobseekers");
       }
       const uploadBody = new FormData();
-      uploadBody.append("file", new Blob([new Uint8Array(file.buffer)], {
-        type: file.mimetype,
-      }), file.originalname);
+      uploadBody.append(
+        "file",
+        new Blob([new Uint8Array(file.buffer)], {
+          type: file.mimetype,
+        }),
+        file.originalname,
+      );
       uploadBody.append("folder", "resumes");
       const { data } = await axios.post<{
         success: boolean;
         message: string;
         data: { url: string; public_id: string };
-      }>(
-        `${env.UPLOAD_SERVICE}/api/utils/upload`,
-        uploadBody,
-        { headers: { "x-internal-key": env.INTERNAL_API_KEY } },
-      );
+      }>(`${env.UPLOAD_SERVICE}/api/utils/upload`, uploadBody, {
+        headers: { "x-internal-key": env.INTERNAL_API_KEY },
+      });
       const [user] = await sql`
         INSERT INTO users(name,email,password,phone_number,role,bio,resume,resume_public_id)
         VALUES(${name},${email},${hashPassword},${phoneNumber},${role},${bio},${data.data.url},${data.data.public_id})
@@ -227,8 +226,10 @@ export const changePassword = TryCatch(async (req, res) => {
     SELECT password FROM users WHERE user_id=${user.user_id}
   `;
   const storedPassword: unknown = users[0]?.password;
-  if (typeof storedPassword !== "string" ||
-    !(await bcrypt.compare(req.body.currentPassword, storedPassword))) {
+  if (
+    typeof storedPassword !== "string" ||
+    !(await bcrypt.compare(req.body.currentPassword, storedPassword))
+  ) {
     throw new AppError(400, "Current password is incorrect");
   }
 
@@ -249,7 +250,10 @@ export const changePassword = TryCatch(async (req, res) => {
 });
 
 export const verifyEmail = TryCatch(async (req, res) => {
-  const { token } = req.params;
+  const token = req.params.token;
+  if (typeof token !== "string" || token.length === 0) {
+    throw new AppError(400, "Invalid verification token");
+  }
   let decoded: string | Jwt.JwtPayload;
   try {
     decoded = Jwt.verify(token, env.EMAIL_VERIFY_JWT_SEC);
@@ -296,11 +300,9 @@ export const forgotPassword = TryCatch(async (req, res) => {
   const user = users[0];
 
   if (user) {
-    const resetToken = Jwt.sign(
-      { email: user.email, purpose: "reset" },
-      env.RESET_JWT_SEC,
-      { expiresIn: "15m" },
-    );
+    const resetToken = Jwt.sign({ email: user.email, purpose: "reset" }, env.RESET_JWT_SEC, {
+      expiresIn: "15m",
+    });
     await redisClient.set(`forgot:${user.email}`, resetToken, { EX: 900 });
 
     await publishToTopic(KAFKA_TOPICS.PasswordResetRequested, {
@@ -320,7 +322,10 @@ export const forgotPassword = TryCatch(async (req, res) => {
 });
 
 export const resetPassword = TryCatch(async (req, res) => {
-  const { token } = req.params;
+  const token = req.params.token;
+  if (typeof token !== "string" || token.length === 0) {
+    throw new AppError(400, "Invalid reset token");
+  }
   const { password } = req.body;
 
   let decoded: string | Jwt.JwtPayload;
@@ -354,8 +359,12 @@ export const resetPassword = TryCatch(async (req, res) => {
     throw new AppError(400, "Invalid or expired reset token");
   }
 
+  const updatedUser = updatedUsers[0];
+  if (!updatedUser) {
+    throw new AppError(400, "Invalid or expired reset token");
+  }
   await redisClient.del(redisKey);
-  await revokeUserRefreshTokens(updatedUsers[0].user_id);
+  await revokeUserRefreshTokens(updatedUser.user_id);
   res.json({
     success: true,
     message: "Password reset successfully",

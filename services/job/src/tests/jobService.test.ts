@@ -86,41 +86,67 @@ beforeEach(() => {
     status: "closed",
     company_id: 2,
   });
-  mocks.deleteJob.mockResolvedValue([{
-    job_id: 12,
-    title: "Engineer",
-    company_id: 2,
-  }]);
-  mocks.expireJobsAndQueueEvents.mockResolvedValue([]);
-  mocks.pendingExpiryEvents.mockResolvedValueOnce([{
-    event_id: "event-123",
-    payload: {
-      eventId: "event-123",
-      occurredAt: "2025-01-01T00:00:00.000Z",
-      jobId: "12",
-      recruiterId: 33,
-      companyId: 2,
+  mocks.deleteJob.mockResolvedValue([
+    {
+      job_id: 12,
       title: "Engineer",
-      status: "expired",
-      changes: { status: "expired" },
+      company_id: 2,
     },
-  }]).mockResolvedValueOnce([]);
+  ]);
+  mocks.expireJobsAndQueueEvents.mockResolvedValue([]);
+  mocks.pendingExpiryEvents
+    .mockResolvedValueOnce([
+      {
+        event_id: "event-123",
+        payload: {
+          eventId: "event-123",
+          occurredAt: "2025-01-01T00:00:00.000Z",
+          jobId: "12",
+          recruiterId: 33,
+          companyId: 2,
+          title: "Engineer",
+          status: "expired",
+          changes: { status: "expired" },
+        },
+      },
+    ])
+    .mockResolvedValueOnce([]);
   mocks.markExpiryEventPublished.mockResolvedValue(undefined);
 });
 
 describe("job domain service", () => {
   it("rejects creating jobs for a company owned by another recruiter", async () => {
     mocks.findCompany.mockResolvedValueOnce({ company_id: 2, owner_id: 99, name: "Other" });
-    await expect(service.createJob(33, {
-      title: "Engineer",
-      description: "Build things",
-      location: "Remote",
-      jobType: "full-time",
-      companyId: 2,
-      skills: [],
-      status: "draft",
-      experienceYears: 0,
-    })).rejects.toMatchObject({ statusCode: 404 });
+    await expect(
+      service.createJob(33, {
+        title: "Engineer",
+        description: "Build things",
+        location: "Remote",
+        jobType: "full-time",
+        companyId: 2,
+        skills: [],
+        status: "draft",
+        experienceYears: 0,
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(mocks.createJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid owner IDs returned by the company repository", async () => {
+    mocks.findCompany.mockResolvedValueOnce({ company_id: 2, owner_id: "invalid", name: "Other" });
+
+    await expect(
+      service.createJob(33, {
+        title: "Engineer",
+        description: "Build things",
+        location: "Remote",
+        jobType: "full-time",
+        companyId: 2,
+        skills: [],
+        status: "draft",
+        experienceYears: 0,
+      }),
+    ).rejects.toMatchObject({ statusCode: 500, isOperational: false });
     expect(mocks.createJob).not.toHaveBeenCalled();
   });
 
@@ -136,38 +162,51 @@ describe("job domain service", () => {
       experienceYears: 3,
     });
 
-    expect(mocks.publishJobCreated).toHaveBeenCalledWith(expect.objectContaining({
-      jobId: "12",
-      recruiterId: 33,
-      companyId: 2,
-      companyName: "Acme",
-      skills: ["typescript"],
-    }));
+    expect(mocks.publishJobCreated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: "12",
+        recruiterId: 33,
+        companyId: 2,
+        companyName: "Acme",
+        location: "Remote",
+        jobType: "full-time",
+        salaryMin: 50000,
+        salaryMax: 100000,
+        skills: ["typescript"],
+        deadline: null,
+      }),
+    );
   });
 
   it("checks job ownership before updating or deleting and publishes domain events", async () => {
     await service.updateJob(33, 12, { title: "Senior Engineer" });
     await service.deleteJob(33, 12);
 
-    expect(mocks.publishJobUpdated).toHaveBeenCalledWith(expect.objectContaining({
-      jobId: "12",
-      recruiterId: 33,
-      changes: { title: "Senior Engineer" },
-    }));
-    expect(mocks.publishJobDeleted).toHaveBeenCalledWith(expect.objectContaining({
-      jobId: "12",
-      recruiterId: 33,
-      companyId: 2,
-    }));
+    expect(mocks.publishJobUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: "12",
+        recruiterId: 33,
+        changes: { title: "Senior Engineer" },
+      }),
+    );
+    expect(mocks.publishJobDeleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: "12",
+        recruiterId: 33,
+        companyId: 2,
+      }),
+    );
   });
 
   it("publishes and acknowledges the durable expiry event", async () => {
     await service.expireJobs();
-    expect(mocks.publishJobUpdated).toHaveBeenCalledWith(expect.objectContaining({
-      jobId: "12",
-      status: "expired",
-      changes: { status: "expired" },
-    }));
+    expect(mocks.publishJobUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: "12",
+        status: "expired",
+        changes: { status: "expired" },
+      }),
+    );
     expect(mocks.markExpiryEventPublished).toHaveBeenCalledWith("event-123");
   });
 

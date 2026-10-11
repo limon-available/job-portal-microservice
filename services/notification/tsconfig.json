@@ -19,5 +19,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "exclude": ["src/tests/**", "src/**/*.test.ts"]
+  "exclude": ["dist", "src/tests/**", "src/**/*.test.ts"]
 }

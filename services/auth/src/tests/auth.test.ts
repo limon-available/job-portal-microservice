@@ -1,12 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
-import {
-  forgotSchema,
-  loginSchema,
-  registerSchema,
-  resetSchema,
-} from "../validators/auth.js";
+import { forgotSchema, loginSchema, registerSchema, resetSchema } from "../validators/auth.js";
 
 process.env.NODE_ENV = "production";
 process.env.DB_URL = "postgresql://user:password@localhost/auth";
@@ -22,19 +17,26 @@ process.env.GATEWAY_INTERNAL_KEY = "auth-test-gateway-key-at-least-32-characters
 process.env.FRONTEND_URL = "http://localhost:3000";
 process.env.CORS_ORIGINS = "http://localhost:3000";
 
+vi.mock("../middleware/authRateLimit.js", () => ({
+  loginRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
+  forgotRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
 const { default: app } = await import("../app.js");
 const { default: errorHandler } = await import("../utils/errorHandler.js");
 
 describe("auth request schemas", () => {
   it("accepts the complete register payload", () => {
-    expect(registerSchema.safeParse({
-      name: "Casey",
-      email: "casey@example.com",
-      password: "long-password",
-      phoneNumber: "5551234567",
-      role: "recruiter",
-      bio: "Hiring engineer",
-    }).success).toBe(true);
+    expect(
+      registerSchema.safeParse({
+        name: "Casey",
+        email: "casey@example.com",
+        password: "long-password",
+        phoneNumber: "5551234567",
+        role: "recruiter",
+        bio: "Hiring engineer",
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects invalid login and forgot-password inputs", () => {
@@ -68,10 +70,7 @@ describe("auth service middleware", () => {
   });
 
   it("rejects origins outside the configured CORS whitelist", async () => {
-    await request(app)
-      .get("/health")
-      .set("Origin", "https://untrusted.example")
-      .expect(403);
+    await request(app).get("/health").set("Origin", "https://untrusted.example").expect(403);
   });
 
   it("does not expose unexpected error details in production", async () => {

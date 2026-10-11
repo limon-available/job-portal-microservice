@@ -2,8 +2,8 @@
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     // File Layout
-     "rootDir": "./src",
-     "outDir": "./dist",
+    "rootDir": "./src",
+    "outDir": "./dist",
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
@@ -12,7 +12,6 @@
     "types": ["node"],
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-  
 
     // For nodejs:
     // "lib": ["esnext"],
@@ -43,7 +42,7 @@
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-    "skipLibCheck": true,
+    "skipLibCheck": true
   },
-  "exclude": ["src/tests/**", "src/**/*.test.ts"]
+  "exclude": ["dist", "src/tests/**", "src/**/*.test.ts"]
 }

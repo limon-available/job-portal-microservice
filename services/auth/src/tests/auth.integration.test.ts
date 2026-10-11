@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
   const users: MockUser[] = [];
   const redis = new Map<string, string>();
   const published: Array<{ topic: string; message: Record<string, unknown> }> = [];
+  let authUserOverride: Record<string, unknown> | undefined;
   let nextUserId = 1;
 
   const sql = async (
@@ -31,7 +32,12 @@ const mocks = vi.hoisted(() => {
     const query = strings.join(" ").replace(/\s+/g, " ").toLowerCase();
     if (query.includes("insert into users")) {
       const [name, email, password, phoneNumber, role, bio] = values as [
-        string, string, string, string, MockUser["role"], string,
+        string,
+        string,
+        string,
+        string,
+        MockUser["role"],
+        string,
       ];
       const user: MockUser = {
         user_id: nextUserId++,
@@ -54,8 +60,8 @@ const mocks = vi.hoisted(() => {
     }
     if (query.includes("update users set password=")) {
       const [password, userIdOrEmail] = values;
-      const user = users.find((item) =>
-        item.user_id === userIdOrEmail || item.email === userIdOrEmail
+      const user = users.find(
+        (item) => item.user_id === userIdOrEmail || item.email === userIdOrEmail,
       );
       if (!user) return [];
       user.password = String(password);
@@ -66,9 +72,7 @@ const mocks = vi.hoisted(() => {
       return user ? [{ password: user.password }] : [];
     }
     if (query.includes("update users set is_email_verified=true")) {
-      const user = users.find((item) =>
-        item.user_id === values[0] && item.email === values[1]
-      );
+      const user = users.find((item) => item.user_id === values[0] && item.email === values[1]);
       if (!user || user.is_email_verified) return [];
       user.is_email_verified = true;
       return [{ user_id: user.user_id }];
@@ -78,32 +82,43 @@ const mocks = vi.hoisted(() => {
       return user ? [{ user_id: user.user_id }] : [];
     }
     if (query.includes("select user_id,name,email,phone_number,role,bio,is_email_verified")) {
+      if (authUserOverride) return [authUserOverride];
       const user = users.find((item) => item.user_id === values[0]);
-      return user ? [{
-        user_id: user.user_id,
-        name: user.name,
-        email: user.email,
-        phone_number: user.phone_number,
-        role: user.role,
-        bio: user.bio,
-        is_email_verified: user.is_email_verified,
-      }] : [];
+      return user
+        ? [
+            {
+              user_id: user.user_id,
+              name: user.name,
+              email: user.email,
+              phone_number: user.phone_number,
+              role: user.role,
+              bio: user.bio,
+              is_email_verified: user.is_email_verified,
+            },
+          ]
+        : [];
     }
     if (query.includes("select user_id,name,email,role from users")) {
       const user = users.find((item) => item.user_id === values[0]);
-      return user ? [{
-        user_id: user.user_id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      }] : [];
+      return user
+        ? [
+            {
+              user_id: user.user_id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+            },
+          ]
+        : [];
     }
     if (query.includes("select u.user_id")) {
       const user = users.find((item) => item.email === values[0]);
       return user ? [{ ...user }] : [];
     }
-    if (query.includes("select user_id,email from users where email=") ||
-        query.includes("select user_id from users where email=")) {
+    if (
+      query.includes("select user_id,email from users where email=") ||
+      query.includes("select user_id from users where email=")
+    ) {
       const user = users.find((item) => item.email === values[0]);
       return user ? [{ user_id: user.user_id, email: user.email }] : [];
     }
@@ -141,6 +156,9 @@ const mocks = vi.hoisted(() => {
     users,
     redis,
     published,
+    setAuthUserOverride(user: Record<string, unknown>) {
+      authUserOverride = user;
+    },
     sql,
     redisClient,
     publishToTopic: vi.fn(async (topic: string, message: Record<string, unknown>) => {
@@ -150,6 +168,7 @@ const mocks = vi.hoisted(() => {
       users.splice(0);
       redis.clear();
       published.splice(0);
+      authUserOverride = undefined;
       nextUserId = 1;
     },
   };
@@ -179,14 +198,15 @@ process.env.CORS_ORIGINS = "http://localhost:3000";
 
 const { default: app } = await import("../app.js");
 
-const register = () => request(app).post("/api/auth/register").send({
-  name: "Test Recruiter",
-  email: "test@example.com",
-  password: "original-password",
-  phoneNumber: "5551234567",
-  role: "recruiter",
-  bio: "Hiring engineers",
-});
+const register = () =>
+  request(app).post("/api/auth/register").send({
+    name: "Test Recruiter",
+    email: "test@example.com",
+    password: "original-password",
+    phoneNumber: "5551234567",
+    role: "recruiter",
+    bio: "Hiring engineers",
+  });
 
 const accessTokenFrom = (response: request.Response): string =>
   response.body.data.accessToken as string;
@@ -255,6 +275,33 @@ describe("auth endpoints", () => {
     expect(response.body.data.user.email).toBe("test@example.com");
   });
 
+  it("rejects malformed user records loaded during authentication", async () => {
+    const registration = await register().expect(201);
+    mocks.setAuthUserOverride({
+      user_id: 1,
+      name: "Test Recruiter",
+      email: "not-an-email",
+      phone_number: "5551234567",
+      role: "recruiter",
+      bio: "Hiring engineers",
+      is_email_verified: false,
+    });
+
+    const response = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${accessTokenFrom(registration)}`)
+      .expect(500);
+    expect(response.body.message).toBe("Internal server error");
+  });
+
+  it("rejects invalid verification and password-reset tokens", async () => {
+    await request(app).get("/api/auth/verify-email/not-a-valid-token").expect(400);
+    await request(app)
+      .post("/api/auth/reset/not-a-valid-token")
+      .send({ password: "replacement-password" })
+      .expect(400);
+  });
+
   it("rotates refresh tokens and revokes the session when a token is reused", async () => {
     const registration = await register().expect(201);
     const oldCookie = refreshCookieFrom(registration);
@@ -266,10 +313,7 @@ describe("auth endpoints", () => {
     const newCookie = refreshCookieFrom(firstRefresh);
     expect(newCookie).not.toBe(oldCookie);
 
-    await request(app)
-      .post("/api/auth/refresh")
-      .set("Cookie", oldCookie)
-      .expect(401);
+    await request(app).post("/api/auth/refresh").set("Cookie", oldCookie).expect(401);
     expect([...mocks.redis.keys()].filter((key) => key.startsWith("refresh:1:"))).toHaveLength(0);
   });
 
@@ -295,10 +339,7 @@ describe("auth endpoints", () => {
 
   it("resets the password and consumes the reset token", async () => {
     await register().expect(201);
-    await request(app)
-      .post("/api/auth/forgot")
-      .send({ email: "test@example.com" })
-      .expect(200);
+    await request(app).post("/api/auth/forgot").send({ email: "test@example.com" }).expect(200);
     const resetEvent = mocks.published.find(
       ({ topic }) => topic === "user.password_reset_requested",
     );

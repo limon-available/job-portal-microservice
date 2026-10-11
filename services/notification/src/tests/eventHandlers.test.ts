@@ -47,11 +47,13 @@ describe("notification Kafka event handlers", () => {
       resetToken: "reset-token",
     });
 
-    expect(mailer.send).toHaveBeenCalledWith(expect.objectContaining({
-      to: "person@example.com",
-      template: "password-reset",
-      context: { resetLink: "https://hireheaven.example/reset/reset-token" },
-    }));
+    expect(mailer.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "person@example.com",
+        template: "password-reset",
+        context: { resetLink: "https://hireheaven.example/reset/reset-token" },
+      }),
+    );
     expect(saveNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 13 }));
   });
 
@@ -69,10 +71,12 @@ describe("notification Kafka event handlers", () => {
       jobTitle: "Engineer",
     });
 
-    expect(mailer.send).toHaveBeenCalledWith(expect.objectContaining({
-      to: "recruiter@example.com",
-      template: "application-submitted",
-    }));
+    expect(mailer.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "recruiter@example.com",
+        template: "application-submitted",
+      }),
+    );
     expect(saveNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 31 }));
   });
 
@@ -90,10 +94,12 @@ describe("notification Kafka event handlers", () => {
       status: "interview",
     });
 
-    expect(mailer.send).toHaveBeenCalledWith(expect.objectContaining({
-      to: "applicant@example.com",
-      template: "application-status-changed",
-    }));
+    expect(mailer.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "applicant@example.com",
+        template: "application-status-changed",
+      }),
+    );
     expect(saveNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 21 }));
   });
 
@@ -103,19 +109,31 @@ describe("notification Kafka event handlers", () => {
       occurredAt: "2026-10-10T00:00:00Z",
       jobId: "job-5",
       recruiterId: 31,
+      companyId: 2,
+      companyName: "Acme",
       title: "Engineer",
       description: "Build great products",
-      matchingRecipients: [{
-        userId: 21,
-        email: "applicant@example.com",
-        name: "Applicant",
-      }],
+      location: "Remote",
+      jobType: "full-time",
+      salaryMin: 50000,
+      salaryMax: 100000,
+      skills: ["typescript"],
+      deadline: null,
+      matchingRecipients: [
+        {
+          userId: 21,
+          email: "applicant@example.com",
+          name: "Applicant",
+        },
+      ],
     });
 
-    expect(mailer.send).toHaveBeenCalledWith(expect.objectContaining({
-      to: "applicant@example.com",
-      template: "job-alert",
-    }));
+    expect(mailer.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "applicant@example.com",
+        template: "job-alert",
+      }),
+    );
     expect(saveNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 21 }));
   });
 });

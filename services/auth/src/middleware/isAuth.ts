@@ -4,9 +4,20 @@ import { sql } from "../utils/db.js";
 import { env } from "../config/env.js";
 import { redisClient } from "../utils/redis.js";
 import type { AccessTokenClaims } from "../types/express.js";
+import type { AuthenticatedUser } from "../types/express.js";
 import Jwt from "jsonwebtoken";
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+
+const authenticatedUserSchema: z.ZodType<AuthenticatedUser> = z.object({
+  user_id: z.number().int().positive().safe(),
+  name: z.string().min(1),
+  email: z.string().email(),
+  phone_number: z.string(),
+  role: z.nativeEnum(Role),
+  bio: z.string().nullable(),
+  is_email_verified: z.boolean(),
+});
 
 export const isAuth = TryCatch(async (req, _res, next) => {
   let gatewayIdentity: { userId: number; role: Role } | undefined;
@@ -22,23 +33,27 @@ export const isAuth = TryCatch(async (req, _res, next) => {
     ) {
       throw new AppError(401, "Trusted gateway identity required");
     }
-    const identity = z.object({
-      userId: z.coerce.number().int().positive().safe(),
-      role: z.nativeEnum(Role),
-    }).safeParse({
-      userId: req.get("x-user-id"),
-      role: req.get("x-user-role"),
-    });
+    const identity = z
+      .object({
+        userId: z.coerce.number().int().positive().safe(),
+        role: z.nativeEnum(Role),
+      })
+      .safeParse({
+        userId: req.get("x-user-id"),
+        role: req.get("x-user-role"),
+      });
     if (!identity.success) throw new AppError(401, "Invalid gateway identity");
     gatewayIdentity = identity.data;
 
-    const forwardedClaims = z.object({
-      jti: z.string().min(1),
-      exp: z.coerce.number().int().positive(),
-    }).safeParse({
-      jti: req.get("x-access-token-id"),
-      exp: req.get("x-access-token-exp"),
-    });
+    const forwardedClaims = z
+      .object({
+        jti: z.string().min(1),
+        exp: z.coerce.number().int().positive(),
+      })
+      .safeParse({
+        jti: req.get("x-access-token-id"),
+        exp: req.get("x-access-token-exp"),
+      });
     if (!forwardedClaims.success || forwardedClaims.data.exp <= Math.floor(Date.now() / 1000)) {
       throw new AppError(401, "Invalid or expired access token");
     }
@@ -59,16 +74,23 @@ export const isAuth = TryCatch(async (req, _res, next) => {
     } catch {
       throw new AppError(401, "Invalid or expired access token");
     }
-    if (
-      typeof decoded === "string" ||
-      typeof decoded.id !== "number" ||
-      typeof decoded.jti !== "string" ||
-      typeof decoded.exp !== "number" ||
-      decoded.purpose !== "access"
-    ) {
+    const parsedClaims = z
+      .object({
+        id: z.number().int().positive().safe(),
+        jti: z.string().min(1),
+        exp: z.number().int().positive(),
+        purpose: z.literal("access"),
+      })
+      .safeParse(decoded);
+    if (!parsedClaims.success) {
       throw new AppError(401, "Invalid access token");
     }
-    claims = decoded as AccessTokenClaims;
+    claims = {
+      id: parsedClaims.data.id,
+      jti: parsedClaims.data.jti,
+      exp: parsedClaims.data.exp,
+      purpose: parsedClaims.data.purpose,
+    };
   }
 
   if (gatewayIdentity && gatewayIdentity.userId !== claims.id) {
@@ -82,10 +104,15 @@ export const isAuth = TryCatch(async (req, _res, next) => {
     SELECT user_id,name,email,phone_number,role,bio,is_email_verified
     FROM users WHERE user_id=${claims.id}
   `;
-  const user = users[0];
-  if (!user) {
+  const userRecord = users[0];
+  if (!userRecord) {
     throw new AppError(401, "User no longer exists");
   }
+  const parsedUser = authenticatedUserSchema.safeParse(userRecord);
+  if (!parsedUser.success) {
+    throw new AppError(500, "Authentication user record is invalid", false);
+  }
+  const user = parsedUser.data;
   if (gatewayIdentity && gatewayIdentity.role !== user.role) {
     throw new AppError(401, "Gateway role does not match account");
   }

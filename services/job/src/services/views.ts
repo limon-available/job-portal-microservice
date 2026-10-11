@@ -1,4 +1,4 @@
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import { randomUUID } from "node:crypto";
 import { createLogger } from "@hireheaven/shared";
 import { env } from "../config/env.js";

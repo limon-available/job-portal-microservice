@@ -6,7 +6,9 @@ const directory = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  outputFileTracingRoot: path.resolve(directory, "../.."),
+  experimental: {
+    outputFileTracingRoot: path.resolve(directory, "../.."),
+  },
   transpilePackages: [],
 };
 

@@ -26,38 +26,44 @@ export const requiresAuthentication = (path: string, method: string): boolean =>
     if (method === "GET" && /^\/api\/auth\/verify-email\/[^/]+$/.test(path)) {
       return false;
     }
-    if (method === "POST" && (
-      path === "/api/auth/register" ||
-      path === "/api/auth/login" ||
-      path === "/api/auth/forgot" ||
-      path === "/api/auth/refresh" ||
-      /^\/api\/auth\/reset\/[^/]+$/.test(path)
-    )) return false;
+    if (
+      method === "POST" &&
+      (path === "/api/auth/register" ||
+        path === "/api/auth/login" ||
+        path === "/api/auth/forgot" ||
+        path === "/api/auth/refresh" ||
+        /^\/api\/auth\/reset\/[^/]+$/.test(path))
+    )
+      return false;
     return true;
   }
   if (isPath(path, "/api/user")) {
-    if (method === "GET" && (
-      path === "/api/user/openapi.json" ||
-      path.startsWith("/api/user/docs") ||
-      /^\/api\/user\/public\/[^/]+$/.test(path)
-    )) return false;
+    if (
+      method === "GET" &&
+      (path === "/api/user/openapi.json" ||
+        path.startsWith("/api/user/docs") ||
+        /^\/api\/user\/public\/[^/]+$/.test(path))
+    )
+      return false;
     return true;
   }
   if (isPath(path, "/api/jobs")) {
     if (path.startsWith("/api/jobs/internal/")) return true;
-    if (method === "GET" && (
-      path === "/api/jobs/openapi.json" ||
-      path.startsWith("/api/jobs/docs") ||
-      path === "/api/jobs/jobs" ||
-      (/^\/api\/jobs\/jobs\/[^/]+$/.test(path) && path !== "/api/jobs/jobs/mine")
-    )) return false;
+    if (
+      method === "GET" &&
+      (path === "/api/jobs/openapi.json" ||
+        path.startsWith("/api/jobs/docs") ||
+        path === "/api/jobs/jobs" ||
+        (/^\/api\/jobs\/jobs\/[^/]+$/.test(path) && path !== "/api/jobs/jobs/mine"))
+    )
+      return false;
     return true;
   }
   if (isPath(path, "/api/applications")) {
-    return !(method === "GET" && (
-      path === "/api/applications/openapi.json" ||
-      path.startsWith("/api/applications/docs")
-    ));
+    return !(
+      method === "GET" &&
+      (path === "/api/applications/openapi.json" || path.startsWith("/api/applications/docs"))
+    );
   }
   return true;
 };
@@ -92,18 +98,16 @@ const routes: ServiceRoute[] = [
 ];
 
 const logger = createLogger({ level: env.LOG_LEVEL });
-const safeRequestPath = (path: string): string => path
-  .replace(/\/api\/auth\/reset\/[^/?]+/, "/api/auth/reset/[redacted]")
-  .replace(/\/api\/auth\/verify-email\/[^/?]+/, "/api/auth/verify-email/[redacted]");
+const safeRequestPath = (path: string): string =>
+  path
+    .replace(/\/api\/auth\/reset\/[^/?]+/, "/api/auth/reset/[redacted]")
+    .replace(/\/api\/auth\/verify-email\/[^/?]+/, "/api/auth/verify-email/[redacted]");
 const errorResponse = (res: Response, statusCode: number, message: string): void => {
   if (res.headersSent) return;
   res.status(statusCode).json({ success: false, message, data: null });
 };
 
-const createProxyRoute = (
-  route: ServiceRoute,
-  redis: GatewayRedisClient,
-): RequestHandler => {
+const createProxyRoute = (route: ServiceRoute, redis: GatewayRedisClient): RequestHandler => {
   const proxy = createProxyMiddleware({
     target: route.target,
     changeOrigin: true,
@@ -136,32 +140,47 @@ const createProxyRoute = (
       },
       error(error, _req, res) {
         logger.warn({ err: error, service: route.prefix }, "upstream proxy failed");
-        errorResponse(res, 502, "Upstream service is unavailable");
+
+        if ("writeHead" in res) {
+          if (!res.headersSent) {
+            res.writeHead(502, {
+              "Content-Type": "application/json",
+            });
+            res.end(
+              JSON.stringify({
+                success: false,
+                message: "Upstream service is unavailable",
+                data: null,
+              }),
+            );
+          } else {
+            res.destroy();
+          }
+        } else {
+          res.destroy();
+        }
       },
     },
   });
 
-  const breakerAction = (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => new Promise((resolve, reject) => {
-    const onFinish = (): void => {
-      res.off("finish", onFinish);
-      if (res.statusCode >= 500) {
-        reject(new Error(`Upstream returned HTTP ${res.statusCode}`));
-      } else {
-        resolve();
-      }
-    };
-    res.once("finish", onFinish);
-    proxy(req, res, (error?: unknown) => {
-      if (error) {
+  const breakerAction = (req: Request, res: Response): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const onFinish = (): void => {
         res.off("finish", onFinish);
-        reject(error);
-      }
+        if (res.statusCode >= 500) {
+          reject(new Error(`Upstream returned HTTP ${res.statusCode}`));
+        } else {
+          resolve();
+        }
+      };
+      res.once("finish", onFinish);
+      proxy(req, res, (error?: unknown) => {
+        if (error) {
+          res.off("finish", onFinish);
+          reject(error);
+        }
+      });
     });
-  });
   const breaker = new CircuitBreaker(breakerAction, {
     timeout: env.PROXY_TIMEOUT_MS + 1000,
     errorThresholdPercentage: 50,
@@ -169,7 +188,9 @@ const createProxyRoute = (
     volumeThreshold: 5,
   });
   breaker.on("open", () => logger.warn({ service: route.prefix }, "upstream circuit opened"));
-  breaker.on("halfOpen", () => logger.info({ service: route.prefix }, "upstream circuit half-open"));
+  breaker.on("halfOpen", () =>
+    logger.info({ service: route.prefix }, "upstream circuit half-open"),
+  );
   breaker.on("close", () => logger.info({ service: route.prefix }, "upstream circuit closed"));
 
   return async (req, res, next) => {
@@ -189,10 +210,15 @@ const createProxyRoute = (
       await breaker.fire(req, res, next);
     } catch (error) {
       const open = breaker.opened;
-      logger.warn({ err: error, service: route.prefix, circuitOpen: open }, "gateway request failed");
-      errorResponse(res, open ? 503 : 502, open
-        ? "Upstream service circuit is open"
-        : "Upstream service is unavailable");
+      logger.warn(
+        { err: error, service: route.prefix, circuitOpen: open },
+        "gateway request failed",
+      );
+      errorResponse(
+        res,
+        open ? 503 : 502,
+        open ? "Upstream service circuit is open" : "Upstream service is unavailable",
+      );
     }
   };
 };
@@ -220,28 +246,33 @@ export const createApp = (redis: GatewayRedisClient) => {
   app.get("/metrics", observability.metricsHandler);
   app.use(requestId);
   app.use(helmet());
-  app.use(cors({
-    credentials: true,
-    origin(origin, callback) {
-      if (!origin || env.CORS_ORIGINS.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new AppError(403, "Origin is not allowed"));
-    },
-  }));
+  app.use(
+    cors({
+      credentials: true,
+      origin(origin, callback) {
+        if (!origin || env.CORS_ORIGINS.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new AppError(403, "Origin is not allowed"));
+      },
+    }),
+  );
   app.use((req, res, next) => {
     const startedAt = process.hrtime.bigint();
     res.once("finish", () => {
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      logger.info({
-        requestId: req.requestId,
-        method: req.method,
-        path: safeRequestPath(req.path),
-        statusCode: res.statusCode,
-        durationMs: Math.round(durationMs * 100) / 100,
-        ip: req.ip,
-      }, "gateway access");
+      logger.info(
+        {
+          requestId: req.requestId,
+          method: req.method,
+          path: safeRequestPath(req.path),
+          statusCode: res.statusCode,
+          durationMs: Math.round(durationMs * 100) / 100,
+          ip: req.ip,
+        },
+        "gateway access",
+      );
     });
     next();
   });
@@ -257,14 +288,16 @@ export const createApp = (redis: GatewayRedisClient) => {
       notification: env.NOTIFICATION_SERVICE_URL,
       utils: env.UTILS_SERVICE_URL,
     };
-    const health = await Promise.all(Object.entries(services).map(async ([name, url]) => {
-      try {
-        const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(2000) });
-        return [name, response.ok] as const;
-      } catch {
-        return [name, false] as const;
-      }
-    }));
+    const health = await Promise.all(
+      Object.entries(services).map(async ([name, url]) => {
+        try {
+          const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(2000) });
+          return [name, response.ok] as const;
+        } catch {
+          return [name, false] as const;
+        }
+      }),
+    );
     const serviceHealth = Object.fromEntries(health);
     const healthy = health.every(([, status]) => status);
     res.status(healthy ? 200 : 503).json({

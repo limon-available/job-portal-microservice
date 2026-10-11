@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { z } from "zod";
 
 export type UserRole = "jobseeker" | "recruiter" | "admin";
 
@@ -13,6 +14,18 @@ export interface SessionUser {
   [key: string]: unknown;
 }
 
+const persistedSessionSchema = z.object({
+  user: z
+    .object({
+      user_id: z.number().int().positive(),
+      name: z.string(),
+      email: z.string().email(),
+      role: z.enum(["jobseeker", "recruiter", "admin"]),
+    })
+    .passthrough()
+    .nullable(),
+});
+
 interface AuthState {
   accessToken: string | null;
   user: SessionUser | null;
@@ -21,21 +34,29 @@ interface AuthState {
   clearSession: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(persist<AuthState, [], [], Pick<AuthState, "user">>((set) => ({
-  accessToken: null,
-  user: null,
-  setSession: (accessToken, user) => {
-    document.cookie = `session_role=${encodeURIComponent(user.role)}; Path=/; Max-Age=604800; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
-    set({ accessToken, user });
-  },
-  setAccessToken: (accessToken) => set({ accessToken }),
-  clearSession: () => {
-    document.cookie = "session_role=; Path=/; Max-Age=0; SameSite=Lax";
-    set({ accessToken: null, user: null });
-  },
-}), {
-  name: "hireheaven-session",
-  storage: createJSONStorage(() => sessionStorage),
-  partialize: (state) => ({ user: state.user }),
-  merge: (persisted, current) => ({ ...current, ...persisted }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist<AuthState, [], [], Pick<AuthState, "user">>(
+    (set) => ({
+      accessToken: null,
+      user: null,
+      setSession: (accessToken, user) => {
+        document.cookie = `session_role=${encodeURIComponent(user.role)}; Path=/; Max-Age=604800; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
+        set({ accessToken, user });
+      },
+      setAccessToken: (accessToken) => set({ accessToken }),
+      clearSession: () => {
+        document.cookie = "session_role=; Path=/; Max-Age=0; SameSite=Lax";
+        set({ accessToken: null, user: null });
+      },
+    }),
+    {
+      name: "hireheaven-session",
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({ user: state.user }),
+      merge: (persisted, current) => {
+        const result = persistedSessionSchema.safeParse(persisted);
+        return { ...current, user: result.success ? result.data.user : null };
+      },
+    },
+  ),
+);

@@ -31,7 +31,10 @@ export const listCompanies: RequestHandler = TryCatch(async (req, res) => {
 });
 
 export const postCompany: RequestHandler = TryCatch(async (req, res) => {
-  const company = await jobService.createCompany(currentUserId(req), parse(companySchema, req.body));
+  const company = await jobService.createCompany(
+    currentUserId(req),
+    parse(companySchema, req.body),
+  );
   res.status(201).json({ success: true, message: "Company created", data: { company } });
 });
 
@@ -95,16 +98,22 @@ export const getMyJobs: RequestHandler = TryCatch(async (req, res) => {
 
 export const getJobs: RequestHandler = TryCatch(async (req, res) => {
   const query = parse(jobSearchSchema, req.query);
-  const requestedSkills = query.skills === undefined
-    ? []
-    : (Array.isArray(query.skills) ? query.skills : query.skills.split(","))
-      .map((skill) => skill.trim())
-      .filter(Boolean);
+  const requestedSkills =
+    query.skills === undefined
+      ? []
+      : (Array.isArray(query.skills) ? query.skills : query.skills.split(","))
+          .map((skill) => skill.trim())
+          .filter(Boolean);
   const { jobs, total } = await jobService.searchJobs({
-    ...query,
     skills: requestedSkills,
+    sort: query.sort,
     limit: query.limit,
     offset: (query.page - 1) * query.limit,
+    ...(query.keyword === undefined ? {} : { keyword: query.keyword }),
+    ...(query.location === undefined ? {} : { location: query.location }),
+    ...(query.jobType === undefined ? {} : { jobType: query.jobType }),
+    ...(query.salaryMin === undefined ? {} : { salaryMin: query.salaryMin }),
+    ...(query.salaryMax === undefined ? {} : { salaryMax: query.salaryMax }),
   });
   res.json({
     success: true,

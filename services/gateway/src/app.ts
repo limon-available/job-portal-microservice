@@ -207,7 +207,7 @@ const createProxyRoute = (route: ServiceRoute, redis: GatewayRedisClient): Reque
         req.headers["x-access-token-id"] = identity.tokenId;
         req.headers["x-access-token-exp"] = String(identity.tokenExpiresAt);
       }
-      await breaker.fire(req, res, next);
+      await breaker.fire(req, res);
     } catch (error) {
       const open = breaker.opened;
       logger.warn(

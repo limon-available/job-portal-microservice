@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { forwardRef } from "react";
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
@@ -25,17 +26,22 @@ export function Button({
   return <button className={cn(buttonVariants({ variant }), className)} {...props} />;
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={cn(
-        "h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30",
-        props.className,
-      )}
-    />
-  );
-}
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, ...props }, ref) => {
+    return (
+      <input
+        ref={ref} // এখানে ref পাস করে দেওয়া হলো
+        {...props}
+        className={cn(
+          "h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30",
+          className,
+        )}
+      />
+    );
+  }
+);
+
+Input.displayName = "Input";
 
 export function Card({ children, className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
@@ -112,9 +118,9 @@ export function Notice({
       className={cn(
         "rounded-lg border px-4 py-3 text-sm",
         tone === "error" &&
-          "border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
+        "border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
         tone === "success" &&
-          "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
+        "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
         tone === "info" && "border-border bg-muted text-muted-foreground",
       )}
     >

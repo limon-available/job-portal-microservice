@@ -111,7 +111,7 @@ export const startConsumers = async (
         handlers.userRegistered,
       ),
     );
-    consumers.push(
+   /* consumers.push(
       await subscribe<PasswordResetRequested>(
         KAFKA_TOPICS.PasswordResetRequested,
         eventSchemas.passwordResetRequested,
@@ -138,7 +138,7 @@ export const startConsumers = async (
         eventSchemas.jobCreated,
         handlers.jobCreated,
       ),
-    );
+    );*/
     return consumers;
   } catch (error) {
     await Promise.all(consumers.map((consumer) => consumer.stop()));

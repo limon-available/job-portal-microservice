@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useSearchParams } from "next/navigation";
 import { api, apiMessage } from "@/lib/api";
 import { useAuthStore, type SessionUser } from "@/lib/auth-store";
 import { Button, Field, Input, Notice } from "@/components/ui";
+
+
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 const registerSchema = z.object({
@@ -58,6 +61,7 @@ export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [resume, setResume] = useState<File | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -71,6 +75,7 @@ export function RegisterForm() {
       if (values.role === "jobseeker" && !resume) throw new Error("Choose a resume PDF, DOC, or DOCX file.");
       const body = new FormData();
       Object.entries(values).forEach(([key, value]) => body.append(key, value));
+      body.append("acceptedTerms", String(acceptedTerms));
       if (resume) body.append("file", resume);
       return (await api.post("/api/auth/register", body)).data.data;
     },
@@ -87,7 +92,37 @@ export function RegisterForm() {
     <Field label="Password"><Input type="password" autoComplete="new-password" {...form.register("password")} />{form.formState.errors.password && <small className="text-red-600">{form.formState.errors.password.message}</small>}</Field>
     <Field label={role === "jobseeker" ? "Professional bio" : "About you / your organization"}><textarea className="min-h-24 rounded-lg border border-border bg-background p-3 text-sm" {...form.register("bio")} /></Field>
     {role === "jobseeker" && <Field label="Resume (PDF, DOC, DOCX)"><Input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setResume(event.target.files?.[0] ?? null)} /></Field>}
-    <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Creating account…" : "Create account"}</Button>
+
+    <div className="flex items-start gap-2 text-sm">
+      <input
+        id="accept-terms"
+        type="checkbox"
+        checked={acceptedTerms}
+        onChange={(event) =>
+          setAcceptedTerms(event.target.checked)
+        }
+        className="mt-1 h-4 w-4 border border-gray-400 bg-white rounded border-border text-primary focus:ring-primary accent-primary"
+      />
+
+      <label htmlFor="accept-terms">
+        I agree to the{" "}
+        <Link href="/terms" className="text-primary underline">
+          Terms & Conditions
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="text-primary underline">
+          Privacy Policy
+        </Link>
+        .
+      </label>
+    </div>
+
+    {!acceptedTerms && (
+      <p className="text-xs text-muted-foreground">
+        Please accept the Terms & Conditions to continue.
+      </p>
+    )}
+    <Button type="submit" disabled={mutation.isPending || !acceptedTerms}>{mutation.isPending ? "Creating account…" : "Create account"}</Button>
   </form>;
 }
 

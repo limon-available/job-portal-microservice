@@ -25,11 +25,7 @@ export const createCompany = async (ownerId: number, company: CompanyInput) => {
   return created;
 };
 
-export const updateCompany = async (
-  ownerId: number,
-  companyId: number,
-  company: CompanyPatch,
-) => {
+export const updateCompany = async (ownerId: number, companyId: number, company: CompanyPatch) => {
   const [updated] = await sql`
     UPDATE companies SET
       name=COALESCE(${company.name ?? null},name),
@@ -64,14 +60,23 @@ export const deleteCompany = async (ownerId: number, companyId: number) => sql`
 `;
 
 const slugify = (title: string): string =>
-  title.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 180) || "job";
+  title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 180) || "job";
 
 export const findOwnedJob = async (ownerId: number, jobId: number) => {
   const [job] = await sql`
     SELECT j.job_id,j.title,j.description,j.location,j.job_type,j.salary_min,j.salary_max,
       j.experience_years,j.deadline,j.status,j.company_id,j.posted_by,j.views,j.slug,
-      j.created_at,j.updated_at,c.name AS company_name
+      j.created_at,j.updated_at,c.name AS company_name,
+      COALESCE((
+        SELECT array_agg(js.skill ORDER BY js.skill)
+        FROM job_skills js WHERE js.job_id=j.job_id
+      ),ARRAY[]::varchar[]) AS skills
     FROM jobs j JOIN companies c ON c.company_id=j.company_id
     WHERE j.job_id=${jobId} AND j.posted_by=${ownerId} AND c.owner_id=${ownerId}
   `;
@@ -92,11 +97,7 @@ export const findJob = async (jobIdOrSlug: string) => {
   return job;
 };
 
-export const createJob = async (
-  ownerId: number,
-  job: JobInput,
-  slugSuffix: string,
-) => {
+export const createJob = async (ownerId: number, job: JobInput, slugSuffix: string) => {
   const slug = `${slugify(job.title)}-${slugSuffix}`;
   const [created] = await sql`
     INSERT INTO jobs(
@@ -184,7 +185,11 @@ export const deleteJob = async (ownerId: number, jobId: number) => sql`
 export const listMyJobs = async (ownerId: number) => sql`
   SELECT j.job_id,j.title,j.description,j.location,j.job_type,j.salary_min,j.salary_max,
     j.experience_years,j.deadline,j.status,j.company_id,j.posted_by,j.views,j.slug,
-    j.created_at,j.updated_at,c.name AS company_name
+    j.created_at,j.updated_at,c.name AS company_name,
+    COALESCE((
+      SELECT array_agg(js.skill ORDER BY js.skill)
+      FROM job_skills js WHERE js.job_id=j.job_id
+    ),ARRAY[]::varchar[]) AS skills
   FROM jobs j JOIN companies c ON c.company_id=j.company_id
   WHERE j.posted_by=${ownerId} AND c.owner_id=${ownerId}
   ORDER BY j.created_at DESC

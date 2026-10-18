@@ -193,7 +193,7 @@ const createProxyRoute = (route: ServiceRoute, redis: GatewayRedisClient): Reque
   );
   breaker.on("close", () => logger.info({ service: route.prefix }, "upstream circuit closed"));
 
-  return async (req, res, next) => {
+  return async (req, res, _next) => {
     try {
       if (route.protectedRoute(req.path, req.method)) {
         const identity = await authenticateRequest(
@@ -210,14 +210,19 @@ const createProxyRoute = (route: ServiceRoute, redis: GatewayRedisClient): Reque
       await breaker.fire(req, res);
     } catch (error) {
       const open = breaker.opened;
+      const appError = error instanceof AppError ? error : undefined;
       logger.warn(
         { err: error, service: route.prefix, circuitOpen: open },
         "gateway request failed",
       );
       errorResponse(
         res,
-        open ? 503 : 502,
-        open ? "Upstream service circuit is open" : "Upstream service is unavailable",
+        appError?.statusCode ?? (open ? 503 : 502),
+        appError?.isOperational
+          ? appError.message
+          : open
+            ? "Upstream service circuit is open"
+            : "Upstream service is unavailable",
       );
     }
   };

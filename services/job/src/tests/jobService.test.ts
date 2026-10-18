@@ -198,6 +198,44 @@ describe("job domain service", () => {
     );
   });
 
+  it("updates compensation and experience fields on an owned draft", async () => {
+    mocks.findOwnedJob.mockResolvedValueOnce({
+      job_id: 12,
+      title: "Engineer",
+      status: "draft",
+      company_id: 2,
+      posted_by: 33,
+      salary_min: null,
+      salary_max: null,
+      deadline: null,
+    });
+    mocks.updateJob.mockResolvedValueOnce({
+      job_id: 12,
+      title: "Engineer",
+      status: "draft",
+      company_id: 2,
+      salary_min: 60000,
+      salary_max: 110000,
+      experience_years: 5,
+      deadline: "2027-03-01",
+    });
+
+    await service.updateJob(33, 12, {
+      salaryMin: 60000,
+      salaryMax: 110000,
+      experienceYears: 5,
+      deadline: "2027-03-01",
+    });
+
+    expect(mocks.findOwnedJob).toHaveBeenCalledWith(33, 12);
+    expect(mocks.updateJob).toHaveBeenCalledWith(33, 12, {
+      salaryMin: 60000,
+      salaryMax: 110000,
+      experienceYears: 5,
+      deadline: "2027-03-01",
+    });
+  });
+
   it("publishes and acknowledges the durable expiry event", async () => {
     await service.expireJobs();
     expect(mocks.publishJobUpdated).toHaveBeenCalledWith(

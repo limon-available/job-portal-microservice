@@ -87,7 +87,9 @@ describe("job API", () => {
 
   it("allows public job search and returns total pagination metadata", async () => {
     await request(app)
-      .get("/api/jobs/jobs?keyword=engineer&location=Remote&jobType=full-time&salaryMin=50000&skills=typescript,react&page=2&limit=10")
+      .get(
+        "/api/jobs/jobs?keyword=engineer&location=Remote&jobType=full-time&salaryMin=50000&skills=typescript,react&page=2&limit=10",
+      )
       .expect(200)
       .expect(({ body }) => {
         expect(body.data.meta).toEqual({
@@ -97,14 +99,16 @@ describe("job API", () => {
           totalPages: 3,
         });
       });
-    expect(mocks.searchJobs).toHaveBeenCalledWith(expect.objectContaining({
-      keyword: "engineer",
-      location: "Remote",
-      jobType: "full-time",
-      salaryMin: 50000,
-      skills: ["typescript", "react"],
-      offset: 10,
-    }));
+    expect(mocks.searchJobs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        keyword: "engineer",
+        location: "Remote",
+        jobType: "full-time",
+        salaryMin: 50000,
+        skills: ["typescript", "react"],
+        offset: 10,
+      }),
+    );
   });
 
   it("returns a public job by ID or slug", async () => {
@@ -120,20 +124,13 @@ describe("job API", () => {
       .set(jobseekerHeaders)
       .send({ name: "Acme" })
       .expect(403);
-    await request(app)
-      .post("/api/jobs/jobs")
-      .set(jobseekerHeaders)
-      .send({})
-      .expect(403);
+    await request(app).post("/api/jobs/jobs").set(jobseekerHeaders).send({}).expect(403);
     expect(mocks.createCompany).not.toHaveBeenCalled();
     expect(mocks.createJob).not.toHaveBeenCalled();
   });
 
   it("requires a trusted gateway identity on private routes", async () => {
-    await request(app)
-      .post("/api/jobs/companies")
-      .send({ name: "Acme" })
-      .expect(401);
+    await request(app).post("/api/jobs/companies").send({ name: "Acme" }).expect(401);
   });
 
   it("creates owned companies and jobs with validated payloads", async () => {
@@ -163,10 +160,13 @@ describe("job API", () => {
         skills: ["TypeScript"],
       })
       .expect(201);
-    expect(mocks.createJob).toHaveBeenCalledWith(33, expect.objectContaining({
-      companyId: 2,
-      title: "Engineer",
-    }));
+    expect(mocks.createJob).toHaveBeenCalledWith(
+      33,
+      expect.objectContaining({
+        companyId: 2,
+        title: "Engineer",
+      }),
+    );
   });
 
   it("validates job salary ranges", async () => {
@@ -210,6 +210,37 @@ describe("job API", () => {
     expect(mocks.updateJob).toHaveBeenCalledWith(33, 12, { title: "Senior Engineer" });
     expect(mocks.updateJobStatus).toHaveBeenCalledWith(33, 12, "open");
     expect(mocks.deleteJob).toHaveBeenCalledWith(33, 12);
+  });
+
+  it("returns draft jobs in the authenticated recruiter's edit listing", async () => {
+    mocks.listMyJobs.mockResolvedValueOnce([
+      {
+        job_id: "12",
+        title: "Draft Engineer",
+        status: "draft",
+        salary_min: null,
+        salary_max: null,
+        experience_years: 0,
+        deadline: null,
+        skills: ["typescript"],
+      },
+    ]);
+
+    await request(app)
+      .get("/api/jobs/jobs/mine")
+      .set(recruiterHeaders)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.data.jobs).toContainEqual(
+          expect.objectContaining({
+            job_id: "12",
+            status: "draft",
+            skills: ["typescript"],
+          }),
+        );
+      });
+
+    expect(mocks.listMyJobs).toHaveBeenCalledWith(33);
   });
 
   it("serves Swagger OpenAPI documentation", async () => {

@@ -16,11 +16,15 @@ const respond = (req: IncomingMessage, res: ServerResponse): void => {
   const path = req.url ?? "/";
   if (path === "/api/auth/internal/users/7") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({
-      success: true,
-      message: "User identity",
-      data: { user: { user_id: 7, name: "Casey", email: "casey@example.test", role: "jobseeker" } },
-    }));
+    res.end(
+      JSON.stringify({
+        success: true,
+        message: "User identity",
+        data: {
+          user: { user_id: 7, name: "Casey", email: "casey@example.test", role: "jobseeker" },
+        },
+      }),
+    );
     return;
   }
   if (path === "/health") {
@@ -30,19 +34,22 @@ const respond = (req: IncomingMessage, res: ServerResponse): void => {
   }
   proxied.push({ path, headers: req.headers });
   res.writeHead(200, { "content-type": "application/json" });
-  res.end(JSON.stringify({
-    success: true,
-    path,
-    userId: req.headers["x-user-id"] ?? null,
-    role: req.headers["x-user-role"] ?? null,
-  }));
+  res.end(
+    JSON.stringify({
+      success: true,
+      path,
+      userId: req.headers["x-user-id"] ?? null,
+      role: req.headers["x-user-role"] ?? null,
+    }),
+  );
 };
 
 beforeAll(async () => {
   upstream = createServer(respond);
   await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   const address = upstream.address();
-  if (!address || typeof address === "string") throw new Error("Test upstream did not bind a TCP port");
+  if (!address || typeof address === "string")
+    throw new Error("Test upstream did not bind a TCP port");
   const url = `http://127.0.0.1:${address.port}`;
   process.env.NODE_ENV = "test";
   process.env.LOG_LEVEL = "silent";
@@ -68,7 +75,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve, reject) => {
-    upstream.close((error) => error ? reject(error) : resolve());
+    upstream.close((error) => (error ? reject(error) : resolve()));
   });
 });
 
@@ -85,7 +92,19 @@ describe("gateway route protection and proxy headers", () => {
       .set("x-user-id", "900")
       .set("x-user-role", "admin")
       .expect(200);
-    await request(app).get("/api/auth/me").expect(401);
+    await request(app)
+      .get("/api/auth/me")
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.message).toBe("Authentication required");
+      });
+
+    await request(app)
+      .get("/api/jobs/companies")
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.message).toBe("Authentication required");
+      });
 
     const loginRequest = proxied.find(({ path }) => path === "/api/auth/login");
     expect(loginRequest?.headers["x-user-id"]).toBeUndefined();
@@ -99,11 +118,10 @@ describe("gateway route protection and proxy headers", () => {
   });
 
   it("verifies JWTs and overwrites spoofed x-user headers with trusted identity", async () => {
-    const accessToken = Jwt.sign(
-      { id: 7, purpose: "access" },
-      jwtSecret,
-      { expiresIn: "15m", jwtid: "trusted-token" },
-    );
+    const accessToken = Jwt.sign({ id: 7, purpose: "access" }, jwtSecret, {
+      expiresIn: "15m",
+      jwtid: "trusted-token",
+    });
     const response = await request(app)
       .get("/api/auth/me")
       .set("Authorization", `Bearer ${accessToken}`)
@@ -119,6 +137,7 @@ describe("gateway route protection and proxy headers", () => {
     const proxiedRequest = proxied.find(({ path }) => path === "/api/auth/me");
     expect(proxiedRequest?.headers["x-user-id"]).toBe("7");
     expect(proxiedRequest?.headers["x-user-role"]).toBe("jobseeker");
+    expect(proxiedRequest?.headers.authorization).toBe(`Bearer ${accessToken}`);
     expect(proxiedRequest?.headers["x-access-token-id"]).toBe("trusted-token");
     expect(Number(proxiedRequest?.headers["x-access-token-exp"])).toBeGreaterThan(
       Math.floor(Date.now() / 1000),
@@ -126,11 +145,10 @@ describe("gateway route protection and proxy headers", () => {
   });
 
   it("rewrites notification routes and refuses direct utility/internal routes", async () => {
-    const accessToken = Jwt.sign(
-      { id: 7, purpose: "access" },
-      jwtSecret,
-      { expiresIn: "15m", jwtid: "notifications-token" },
-    );
+    const accessToken = Jwt.sign({ id: 7, purpose: "access" }, jwtSecret, {
+      expiresIn: "15m",
+      jwtid: "notifications-token",
+    });
     await request(app)
       .get("/api/notifications/unread-count")
       .set("Authorization", `Bearer ${accessToken}`)

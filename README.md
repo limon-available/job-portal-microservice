@@ -65,7 +65,7 @@ job-portal-microservice/
     │       ├── app.ts      # mounts /api/auth
     │       ├── index.ts    # validated config, Redis + Kafka, server lifecycle
     │       ├── producer.ts # Kafka producer
-    │       
+    │
     │       ├── controllers/auth.ts
     │       ├── routes/auth.ts
     │       ├── middleware/ # validation, rate limits, request IDs, uploads
@@ -106,13 +106,13 @@ npm install
 
 Root scripts:
 
-| Script | Purpose |
-|--------|---------|
-| `npm run dev` | build shared package, then run the gateway and all six backend services |
-| `npm run build` | build all workspaces |
-| `npm run lint` | lint the repository with ESLint |
-| `npm run format` / `npm run format:check` | format or check formatting with Prettier |
-| `npm test` | build shared then run workspace tests |
+| Script                                    | Purpose                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `npm run dev`                             | build shared package, then run the gateway and all six backend services |
+| `npm run build`                           | build all workspaces                                                    |
+| `npm run lint`                            | lint the repository with ESLint                                         |
+| `npm run format` / `npm run format:check` | format or check formatting with Prettier                                |
+| `npm test`                                | build shared then run workspace tests                                   |
 
 Husky runs `lint-staged` before commits and Commitlint validates Conventional Commit messages. Shared Kafka topics, payloads, roles, errors, and Pino logger factory are exported from `@hireheaven/shared`. Its Kafka consumer helper retries with exponential backoff, sends failed events to `<topic>.dlq`, and marks successfully handled event IDs in Redis as `processed:<eventId>`.
 
@@ -134,15 +134,15 @@ Apply the application-owned schema with `npm run migrate:up --workspace @hirehea
 
 ## Services
 
-| Service | Port | Base path | Responsibilities |
-|---------|------|-----------|------------------|
-| gateway | 8080 | — | Public entry point, JWT verification, trusted identity forwarding, Redis rate limiting, proxying |
-| auth | 5000 | `/api/auth` | register, login, forgot-password, reset-password |
-| utils | 5001 | `/api/utils` | Internal-key-protected multipart uploads and deletion via Cloudinary |
-| notification | 5005 | `/notifications` | Kafka email delivery and per-user notification inbox |
-| user | 5002 | `/api/user` | Profile, skills, education, experience, completion, public profiles, and saved jobs |
-| job | 5003 | `/api/jobs` | Recruiter companies/jobs, public search/detail, Kafka lifecycle events |
-| application | 5004 | `/api/applications` | Jobseeker applications, recruiter review/state transitions, job deletion handling |
+| Service      | Port | Base path           | Responsibilities                                                                                 |
+| ------------ | ---- | ------------------- | ------------------------------------------------------------------------------------------------ |
+| gateway      | 8080 | —                   | Public entry point, JWT verification, trusted identity forwarding, Redis rate limiting, proxying |
+| auth         | 5000 | `/api/auth`         | register, login, forgot-password, reset-password                                                 |
+| utils        | 5001 | `/api/utils`        | Internal-key-protected multipart uploads and deletion via Cloudinary                             |
+| notification | 5005 | `/notifications`    | Kafka email delivery and per-user notification inbox                                             |
+| user         | 5002 | `/api/user`         | Profile, skills, education, experience, completion, public profiles, and saved jobs              |
+| job          | 5003 | `/api/jobs`         | Recruiter companies/jobs, public search/detail, Kafka lifecycle events                           |
+| application  | 5004 | `/api/applications` | Jobseeker applications, recruiter review/state transitions, job deletion handling                |
 
 The web app runs on port 3000 and uses the gateway at port 8080. It is a Next.js 14 App Router workspace in `apps/web`, with public/auth/seeker/recruiter/admin route groups, URL-driven job filters, job detail metadata and JobPosting JSON-LD, role dashboards, responsive skeleton/error/404 states, and system-aware dark mode. shadcn/ui-compatible primitives are in `apps/web/src/components/ui.tsx`.
 
@@ -159,6 +159,7 @@ Web routes include `/`, `/jobs`, `/jobs/[idOrSlug]`, `/login`, `/register`, `/fo
 - job: `axios`, `ioredis`, `node-cron`, `multer`, `node-pg-migrate`, `swagger-ui-express`, `@neondatabase/serverless`
 - application: `axios`, `redis`, `node-pg-migrate`, `swagger-ui-express`, `@neondatabase/serverless`
 - Root tooling: ESLint, Prettier, Husky, lint-staged, Commitlint, Vitest, TypeScript
+
 ## Database Schema (auth)
 
 Managed by versioned node-pg-migrate scripts in `services/auth/migrations`:
@@ -197,18 +198,18 @@ Before proxying, the gateway removes client-supplied `x-user-*`, `x-gateway-key`
 
 ### Auth `http://localhost:5000/api/auth`
 
-| Method | Endpoint | Body | Description |
-|--------|----------|------|-------------|
-| POST | `/register` | multipart `name,email,password,phoneNumber,role,bio,file` | recruiter: direct insert; jobseeker: sends the resume as multipart to utils with `x-internal-key`. Publishes `user.registered`, returns a 15m access token and sets a 7d refresh cookie |
-| POST | `/login` | `{email,password}` | Zod validation and bcrypt compare; returns user+skills (no password) and access token; sets refresh cookie; five attempts per 15 minutes per IP/email |
-| POST | `/forgot` | `{email}` | generic reply; if exists: reset-purpose JWT signed with `RESET_JWT_SEC` for `15m`, `SET forgot:<email> EX 900`, publishes `user.password_reset_requested`; five attempts per 15 minutes per IP/email |
-| POST | `/reset/:token` | `{password}` | verifies reset-purpose JWT against Redis, hashes and updates password, then consumes the token |
-| GET | `/verify-email/:token` | — | verifies the 24-hour registration token and marks the email verified |
-| GET | `/me` | Bearer access token | returns the authenticated user |
-| POST | `/refresh` | refresh cookie | rotates the 7d refresh token; reuse revokes all refresh tokens for that user |
-| POST | `/logout` | Bearer access token + refresh cookie | blacklists the access token through expiry and removes the presented refresh token |
-| POST | `/change-password` | `{currentPassword,password}` + Bearer access token | changes the password and revokes active sessions |
-| GET | `/health` | — | liveness check |
+| Method | Endpoint               | Body                                                      | Description                                                                                                                                                                                          |
+| ------ | ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/register`            | multipart `name,email,password,phoneNumber,role,bio,file` | recruiter: direct insert; jobseeker: sends the resume as multipart to utils with `x-internal-key`. Publishes `user.registered`, returns a 15m access token and sets a 7d refresh cookie              |
+| POST   | `/login`               | `{email,password}`                                        | Zod validation and bcrypt compare; returns user+skills (no password) and access token; sets refresh cookie; five attempts per 15 minutes per IP/email                                                |
+| POST   | `/forgot`              | `{email}`                                                 | generic reply; if exists: reset-purpose JWT signed with `RESET_JWT_SEC` for `15m`, `SET forgot:<email> EX 900`, publishes `user.password_reset_requested`; five attempts per 15 minutes per IP/email |
+| POST   | `/reset/:token`        | `{password}`                                              | verifies reset-purpose JWT against Redis, hashes and updates password, then consumes the token                                                                                                       |
+| GET    | `/verify-email/:token` | —                                                         | verifies the 24-hour registration token and marks the email verified                                                                                                                                 |
+| GET    | `/me`                  | Bearer access token                                       | returns the authenticated user                                                                                                                                                                       |
+| POST   | `/refresh`             | refresh cookie                                            | rotates the 7d refresh token; reuse revokes all refresh tokens for that user                                                                                                                         |
+| POST   | `/logout`              | Bearer access token + refresh cookie                      | blacklists the access token through expiry and removes the presented refresh token                                                                                                                   |
+| POST   | `/change-password`     | `{currentPassword,password}` + Bearer access token        | changes the password and revokes active sessions                                                                                                                                                     |
+| GET    | `/health`              | —                                                         | liveness check                                                                                                                                                                                       |
 
 The refresh token is HttpOnly, Secure, SameSite=Strict, and scoped to `/api/auth`. Its SHA-256 hash is stored in Redis as `refresh:<userId>:<tokenId>`. Protected endpoints require `Authorization: Bearer <accessToken>`.
 
@@ -227,10 +228,10 @@ curl -X POST http://localhost:5000/api/auth/forgot \
 
 ### Utils `http://localhost:5001/api/utils`
 
-| Method | Endpoint | Body | Description |
-|--------|----------|------|-------------|
-| POST | `/upload` | multipart `file`, `folder` (`resumes`, `avatars`, or `logos`) | requires `x-internal-key`; accepts PDF/DOC/DOCX/PNG/JPG/WEBP up to 5MB with matching MIME type and extension |
-| DELETE | `/upload/:publicId?folder=resumes` | — | requires `x-internal-key`; deletes a Cloudinary asset in `resumes`, `avatars`, or `logos` |
+| Method | Endpoint                           | Body                                                          | Description                                                                                                  |
+| ------ | ---------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| POST   | `/upload`                          | multipart `file`, `folder` (`resumes`, `avatars`, or `logos`) | requires `x-internal-key`; accepts PDF/DOC/DOCX/PNG/JPG/WEBP up to 5MB with matching MIME type and extension |
+| DELETE | `/upload/:publicId?folder=resumes` | —                                                             | requires `x-internal-key`; deletes a Cloudinary asset in `resumes`, `avatars`, or `logos`                    |
 
 ## Event Flow (Kafka)
 
@@ -289,12 +290,12 @@ Copy `services/gateway/.env.example` to `services/gateway/.env`. Set `JWT_SEC` t
 
 Notification API (gateway supplies `x-gateway-key`, `x-user-id`, and `x-user-role` headers):
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/notifications` | List the current user's notifications; supports `limit` and `offset` |
-| PATCH | `/notifications/:id/read` | Mark one owned notification as read |
-| PATCH | `/notifications/read-all` | Mark all owned notifications as read |
-| GET | `/notifications/unread-count` | Return the current user's unread count |
+| Method | Endpoint                      | Description                                                          |
+| ------ | ----------------------------- | -------------------------------------------------------------------- |
+| GET    | `/notifications`              | List the current user's notifications; supports `limit` and `offset` |
+| PATCH  | `/notifications/:id/read`     | Mark one owned notification as read                                  |
+| PATCH  | `/notifications/read-all`     | Mark all owned notifications as read                                 |
+| GET    | `/notifications/unread-count` | Return the current user's unread count                               |
 
 Application event payloads include recipient identity and email fields so the notification service never queries another service's tables. A `job.created` event may include `matchingRecipients` for optional matching alerts.
 
@@ -302,21 +303,21 @@ Application event payloads include recipient identity and email fields so the no
 
 Private endpoints require gateway-forwarded `x-user-id` and `x-user-role`, plus `x-gateway-key` matching `GATEWAY_INTERNAL_KEY`. The gateway must strip client-supplied identity headers and set them only after authenticating the caller. Public profile reads do not require these headers.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET / PUT | `/profile` | Read or update name, phone, and bio |
-| PUT | `/profile/picture` | Multipart `file`; replaces avatar and deletes the old Cloudinary asset |
-| PUT | `/profile/resume` | Multipart `file`; replaces resume and deletes the old Cloudinary asset |
-| POST / DELETE / GET | `/skills` | Add a skill by name (create if absent), remove by name, or list own skills |
-| GET / POST | `/education` | List or create education entries |
-| PUT / DELETE | `/education/:id` | Update or delete an owned education entry |
-| GET / POST | `/experience` | List or create experience entries |
-| PUT / DELETE | `/experience/:id` | Update or delete an owned experience entry |
-| GET | `/profile/completion` | Return completion percentage and completed/total field counts |
-| GET | `/public/:userId` | Read public profile, skills, education, and experience (never email or phone) |
-| GET / POST | `/saved-jobs` | List or save jobs by job ID |
-| DELETE | `/saved-jobs/:jobId` | Remove a saved job |
-| GET | `/docs` | Swagger UI; OpenAPI JSON at `/openapi.json` |
+| Method              | Endpoint              | Description                                                                   |
+| ------------------- | --------------------- | ----------------------------------------------------------------------------- |
+| GET / PUT           | `/profile`            | Read or update name, phone, and bio                                           |
+| PUT                 | `/profile/picture`    | Multipart `file`; replaces avatar and deletes the old Cloudinary asset        |
+| PUT                 | `/profile/resume`     | Multipart `file`; replaces resume and deletes the old Cloudinary asset        |
+| POST / DELETE / GET | `/skills`             | Add a skill by name (create if absent), remove by name, or list own skills    |
+| GET / POST          | `/education`          | List or create education entries                                              |
+| PUT / DELETE        | `/education/:id`      | Update or delete an owned education entry                                     |
+| GET / POST          | `/experience`         | List or create experience entries                                             |
+| PUT / DELETE        | `/experience/:id`     | Update or delete an owned experience entry                                    |
+| GET                 | `/profile/completion` | Return completion percentage and completed/total field counts                 |
+| GET                 | `/public/:userId`     | Read public profile, skills, education, and experience (never email or phone) |
+| GET / POST          | `/saved-jobs`         | List or save jobs by job ID                                                   |
+| DELETE              | `/saved-jobs/:jobId`  | Remove a saved job                                                            |
+| GET                 | `/docs`               | Swagger UI; OpenAPI JSON at `/openapi.json`                                   |
 
 Profile pictures accept PNG/JPG/WEBP and resumes accept PDF/DOC/DOCX, each up to 5 MB. Upload and replacement deletion call the utils service using `INTERNAL_API_KEY`.
 
@@ -330,19 +331,60 @@ Recruiters can list a job's applications with `GET /job/:jobId?status=applied&pa
 
 Recruiter-only routes require the gateway-forwarded identity headers and gateway key. Company and job updates/deletes are scoped to the authenticated recruiter; a job can reference only a company owned by that recruiter. Public listing returns `data.meta.total` and supports `keyword`, `location`, `jobType`, `salaryMin`, `salaryMax`, comma-separated or repeated `skills`, `sort` (`newest`, `oldest`, `salary_asc`, `salary_desc`), `page`, and `limit`. Public detail accepts a numeric ID or slug. View increments are buffered in Redis and flushed to the job database periodically.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET / POST | `/companies` | List owned companies or create one |
-| PUT / DELETE | `/companies/:id` | Update/delete an owned company; deletion is rejected while jobs reference it |
-| PUT | `/companies/:id/logo` | Upload/replace PNG/JPG/WEBP logo through utils |
-| GET / POST | `/jobs` | Public search or create a recruiter-owned job |
-| GET | `/jobs/mine` | List the authenticated recruiter's jobs |
-| GET | `/jobs/:idOrSlug` | Get a public open job and increment its view count |
-| PUT / DELETE | `/jobs/:id` | Update or delete an owned job |
-| PATCH | `/jobs/:id/status` | Change an owned job's status |
-| GET | `/docs` | Swagger UI; OpenAPI JSON at `/openapi.json` |
+| Method       | Endpoint              | Description                                                                  |
+| ------------ | --------------------- | ---------------------------------------------------------------------------- |
+| GET / POST   | `/companies`          | List owned companies or create one                                           |
+| PUT / DELETE | `/companies/:id`      | Update/delete an owned company; deletion is rejected while jobs reference it |
+| PUT          | `/companies/:id/logo` | Upload/replace PNG/JPG/WEBP logo through utils                               |
+| GET / POST   | `/jobs`               | Public search or create a recruiter-owned job                                |
+| GET          | `/jobs/mine`          | List the authenticated recruiter's jobs                                      |
+| GET          | `/jobs/:idOrSlug`     | Get a public open job and increment its view count                           |
+| PUT / DELETE | `/jobs/:id`           | Update or delete an owned job                                                |
+| PATCH        | `/jobs/:id/status`    | Change an owned job's status                                                 |
+| GET          | `/docs`               | Swagger UI; OpenAPI JSON at `/openapi.json`                                  |
 
 The hourly expiry task closes open jobs whose deadline has passed and publishes `job.updated` with `status: expired`. Job create/update/delete operations publish the corresponding shared `job.created`, `job.updated`, and `job.deleted` events.
+
+### Troubleshooting recruiter job posting
+
+The API gateway does not define a website route at `/`, so `http://localhost:8080/` returning `{"success":false,"message":"Route not found","data":null}` is expected. Use `http://localhost:8080/health` for aggregate service health, `http://localhost:8080/api/jobs/openapi.json` for the job API schema, and `http://localhost:3000` for the web app.
+
+The recruiter form loads the recruiter's companies from `GET /api/jobs/companies` and requires a positive `companyId` when submitting `POST /api/jobs/jobs`. If no company exists, the form shows “Add a company profile before creating a job” and disables submission. A missing/invalid selection is a client validation or API `400` issue, not an upstream connection failure. The gateway also requires a valid access token for both company and job-write routes; expired/missing authentication should be `401`, after which the web client's refresh-token interceptor can attempt a refresh. The gateway preserves those authentication status codes rather than converting them to `502`.
+
+The job wizard validates the current step when Continue is selected, retains entered values while moving between steps, and submits only from the final Details step. In particular, reaching the salary fields must not save or navigate away; successful create/update navigation happens only after the final API request succeeds. Editing an existing job waits for its company and recruiter-owned job data to load before displaying the form. The edit route and API results normalize numeric `bigserial` IDs whether PostgreSQL returns them as numbers or strings, and the recruiter job listing includes saved skills so updating a draft does not clear them.
+
+For an upstream error, inspect the browser's Network panel and note the request URL, status, response message, and `x-request-id`; do not share access tokens or cookies. Then inspect service logs:
+
+```powershell
+docker compose ps
+docker compose logs --tail=100 gateway job auth
+```
+
+Interpret the result by status:
+
+- `401` / `403`: sign in again and check the refresh cookie, token expiry, recruiter role, and gateway `JWT_SEC` matching the auth service. Confirm the request carries `Authorization: Bearer <access-token>`; never log or paste the token itself.
+- `400`: check the response message and form values, especially that a company is selected and the submitted `companyId` belongs to the signed-in recruiter.
+- `502` / `503`: check gateway logs for proxy connection failures, timeouts, or an open circuit, and confirm the job container is healthy/reachable.
+- `500` from job operations: inspect the job-service error log and its database configuration. In particular, replace the example `DB_URL` hostname `your-neon-host` in `services/job/.env` with the real connection string for the job service's own Neon database. Do not use another service's database URL. The current failure signature `getaddrinfo ... your-neon-host` means DNS cannot resolve the example hostname; it is not caused by the form or company selection.
+
+The current local Compose configuration also has different example `JWT_SEC` values in `services/auth/.env` and `services/gateway/.env`; both are still placeholders. The gateway must verify access tokens with exactly the same `JWT_SEC` that Auth uses. Generate one strong random value, set that same value in both files, then recreate both containers. Existing access tokens will no longer be valid, so sign in again:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
+docker compose up -d --force-recreate auth gateway
+```
+
+Copy the generated value into both local env files without posting it in logs or chat. For local non-Compose development, keep the two service `.env` values identical as well.
+
+After configuring the job database, apply its schema and recreate the job container so it receives the updated environment:
+
+```powershell
+docker compose run --rm --no-deps job npm run migrate:up --workspace @hireheaven/job
+docker compose up -d --force-recreate job
+docker compose logs --tail=50 job
+```
+
+The frontend uses the shared Axios client, which sends the access token, includes credentials for the refresh cookie, and exposes the API envelope's message through `apiMessage(error)`. Backend routes validate job fields with Zod and return `{ success, message, data }`; use the `x-request-id` from the response to correlate gateway and job logs. A direct request to the root URL is not a useful job-submission or gateway health check.
 
 ## Getting Started
 
@@ -384,28 +426,47 @@ For development with source mounts and TypeScript hot reload, use the override:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
+Choose one development mode at a time. The Compose stack publishes the web app on port 3000 and the gateway on port 8080; `npm run dev` starts local copies of both and will conflict if those Compose containers are already running. If Compose is running, use its web app at `http://localhost:3000` and gateway at `http://localhost:8080` instead of starting `npm run dev`.
+
+To run the workspaces locally while keeping the Compose Kafka and Redis containers, stop only the Compose web and gateway containers before running `npm run dev`:
+
+```powershell
+docker compose stop web gateway
+npm run dev
+```
+
+If port 3000 is still in use, identify its owner before stopping anything:
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 3000 |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-Process -Id <PID>
+```
+
+Replace `<PID>` with the reported process ID. Stop it only after confirming it is a process you intend to close. Since the root dev script uses `concurrently -k`, a port conflict in one workspace stops the other local watchers as well.
+
 The Kafka KRaft broker creates all seven shared domain topics and their matching `.dlq` topics in the one-shot `kafka-init` job before Kafka-dependent services start. Database migrations remain explicit and service-owned; `npm run migrate:all` applies them in sequence through the service containers. Auth verification and password-reset email links direct users into the web app (`/verify-email` and `/reset/[token]`).
 
 GitHub Actions runs lint, typecheck, all service tests, and builds with Postgres and Redis service containers. The separate Docker publishing workflow pushes `ghcr.io/limon-available/job-portal-microservice-{auth,utils,notification,user,job,application,gateway,web}` images tagged `latest` and with the commit SHA on pushes to `main`. Set the repository Actions variable `NEXT_PUBLIC_GATEWAY_URL` to the public gateway origin before deploying the published web image; builds fall back to localhost for development. The opt-in end-to-end test uses live gateway/API/Kafka/database services and an SMTP test sink; configure `E2E_GATEWAY_URL` and `E2E_PASSWORD`, apply migrations, and provide upload/email integrations before running it. It creates disposable accounts and company/job/application records, so use an isolated test environment.
 
-| Script | Purpose |
-|--------|---------|
-| `npm run up` | build and start the complete production-style Docker Compose stack |
-| `npm run down` | stop and remove containers, retaining Kafka/Redis data volumes |
-| `npm run logs` | follow all Compose service logs |
-| `npm run migrate:all` | build migration images and apply every service migration |
-| `npm run dev` | run all workspaces locally (requires Node 20+, Kafka, Redis, and configured service env) |
-| `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` | start the development Compose stack with source mounts and hot reload |
-| `npm run build` | compile all workspaces to `dist/` |
-| `npm test` | build shared and run service tests |
-| `npm run lint` | run ESLint |
-| `npm run typecheck` | typecheck all workspaces without emitting files |
-| `npm run test:e2e` | run the register-to-notification flow against a configured live stack |
-| `npm run migrate:up --workspace @hireheaven/auth` | apply auth schema migrations |
-| `npm run migrate:up --workspace @hireheaven/notification` | apply notification schema migrations |
-| `npm run migrate:up --workspace @hireheaven/user` | apply user schema migrations |
-| `npm run migrate:up --workspace @hireheaven/job` | apply job schema migrations |
-| `npm run migrate:up --workspace @hireheaven/application` | apply application schema migrations |
+| Script                                                                      | Purpose                                                                                  |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `npm run up`                                                                | build and start the complete production-style Docker Compose stack                       |
+| `npm run down`                                                              | stop and remove containers, retaining Kafka/Redis data volumes                           |
+| `npm run logs`                                                              | follow all Compose service logs                                                          |
+| `npm run migrate:all`                                                       | build migration images and apply every service migration                                 |
+| `npm run dev`                                                               | run all workspaces locally (requires Node 20+, Kafka, Redis, and configured service env) |
+| `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` | start the development Compose stack with source mounts and hot reload                    |
+| `npm run build`                                                             | compile all workspaces to `dist/`                                                        |
+| `npm test`                                                                  | build shared and run service tests                                                       |
+| `npm run lint`                                                              | run ESLint                                                                               |
+| `npm run typecheck`                                                         | typecheck all workspaces without emitting files                                          |
+| `npm run test:e2e`                                                          | run the register-to-notification flow against a configured live stack                    |
+| `npm run migrate:up --workspace @hireheaven/auth`                           | apply auth schema migrations                                                             |
+| `npm run migrate:up --workspace @hireheaven/notification`                   | apply notification schema migrations                                                     |
+| `npm run migrate:up --workspace @hireheaven/user`                           | apply user schema migrations                                                             |
+| `npm run migrate:up --workspace @hireheaven/job`                            | apply job schema migrations                                                              |
+| `npm run migrate:up --workspace @hireheaven/application`                    | apply application schema migrations                                                      |
 
 ## Roadmap & Known Gaps
 

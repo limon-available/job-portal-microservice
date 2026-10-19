@@ -1,0 +1,54 @@
+Job Portal: Resolved Errors and Solutions
+=========================================
+
+1. Job search did not match company names
+-----------------------------------------
+Reason:
+The public keyword search only checked the job title and description. It did not
+check the company name, so a search using an employer's name could return no jobs.
+The total-count query also had to use the same filters as the result query to
+keep pagination metadata accurate.
+
+Solution:
+Updated services/job/src/repositories/jobs.ts to join the companies table and
+match keywords against the company name in both the result and count queries.
+Added services/job/src/tests/jobSearch.test.ts as regression coverage.
+
+2. Job service lint rejected the Express request type
+------------------------------------------------------
+Reason:
+The authenticatedUser property was added to Express Request using a global
+namespace Express declaration. The repository's ESLint rule
+@typescript-eslint/no-namespace rejects that declaration style.
+
+Solution:
+Updated services/job/src/middleware/isAuth.ts to augment the
+express-serve-static-core Request interface directly. The request property type
+and runtime authentication behavior remain unchanged.
+
+3. Logged-in recruiters were sent to registration from "Post a job"
+--------------------------------------------------------------------
+Reason:
+The public homepage's "Post a job" CTA linked directly to
+/register?role=recruiter for every visitor, without checking the current
+session. Therefore, an already-authenticated recruiter who clicked it landed
+on registration instead of the protected recruiter job form. The session
+cookie and middleware were not the cause of this specific redirect: the CTA
+bypassed the existing recruiter route.
+
+Solution:
+Updated the homepage to read the existing session_role cookie and choose the
+CTA destination during server rendering. A valid logged-in role is sent to
+/recruiter/jobs/new; visitors continue to /register?role=recruiter. This avoids
+client hydration timing issues. The cookie is only a navigation hint: middleware
+continues to enforce role routing, while the gateway/API validate JWT access.
+
+Verification
+------------
+- npm.cmd run test --workspace @hireheaven/job - passed, 19 tests.
+- npm.cmd run typecheck --workspace @hireheaven/job - passed.
+- npm.cmd run lint --workspace @hireheaven/job - passed.
+- ESLint on the changed job-search files - passed.
+- npm.cmd run typecheck --workspace @hireheaven/web - passed.
+- ESLint on apps/web/src/app/(public)/page.tsx - passed.
+- On Windows PowerShell, npm.cmd avoids execution-policy failures loading npm.ps1.

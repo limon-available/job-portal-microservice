@@ -230,7 +230,7 @@ export const searchJobs = async (filters: SearchFilters) => {
     LEFT JOIN job_skills js ON js.job_id=j.job_id
     WHERE j.status='open'
       AND (j.deadline IS NULL OR j.deadline >= CURRENT_DATE)
-      AND (${keyword}::text IS NULL OR
+      AND (${keyword}::text IS NULL OR c.name ILIKE '%' || ${keyword} || '%' OR
         to_tsvector('english',coalesce(j.title,'') || ' ' || coalesce(j.description,'')) @@
         plainto_tsquery('english',${keyword}))
       AND (${location}::text IS NULL OR j.location ILIKE '%' || ${location} || '%')
@@ -253,9 +253,9 @@ export const searchJobs = async (filters: SearchFilters) => {
   `;
   const [count] = await sql`
     SELECT COUNT(DISTINCT j.job_id)::integer AS total
-    FROM jobs j
+    FROM jobs j JOIN companies c ON c.company_id=j.company_id
     WHERE j.status='open' AND (j.deadline IS NULL OR j.deadline >= CURRENT_DATE)
-      AND (${keyword}::text IS NULL OR
+      AND (${keyword}::text IS NULL OR c.name ILIKE '%' || ${keyword} || '%' OR
         to_tsvector('english',coalesce(j.title,'') || ' ' || coalesce(j.description,'')) @@
         plainto_tsquery('english',${keyword}))
       AND (${location}::text IS NULL OR j.location ILIKE '%' || ${location} || '%')

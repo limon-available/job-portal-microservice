@@ -329,7 +329,7 @@ Recruiters can list a job's applications with `GET /job/:jobId?status=applied&pa
 
 ### Job `http://localhost:5003/api/jobs`
 
-Recruiter-only routes require the gateway-forwarded identity headers and gateway key. Company and job updates/deletes are scoped to the authenticated recruiter; a job can reference only a company owned by that recruiter. Public listing returns `data.meta.total` and supports `keyword`, `location`, `jobType`, `salaryMin`, `salaryMax`, comma-separated or repeated `skills`, `sort` (`newest`, `oldest`, `salary_asc`, `salary_desc`), `page`, and `limit`. Public detail accepts a numeric ID or slug. View increments are buffered in Redis and flushed to the job database periodically.
+Recruiter-only routes require the gateway-forwarded identity headers and gateway key. Company and job updates/deletes are scoped to the authenticated recruiter; a job can reference only a company owned by that recruiter. Public listing returns `data.meta.total` and supports `keyword` (job title, description, or company name), `location`, `jobType`, `salaryMin`, `salaryMax`, comma-separated or repeated `skills`, `sort` (`newest`, `oldest`, `salary_asc`, `salary_desc`), `page`, and `limit`. Public detail accepts a numeric ID or slug. View increments are buffered in Redis and flushed to the job database periodically.
 
 | Method       | Endpoint              | Description                                                                  |
 | ------------ | --------------------- | ---------------------------------------------------------------------------- |

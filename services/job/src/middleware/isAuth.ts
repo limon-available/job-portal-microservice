@@ -4,14 +4,12 @@ import { AppError, Role } from "@hireheaven/shared";
 import { z } from "zod";
 import { env } from "../config/env.js";
 
-declare global {
-  namespace Express {
-    interface Request {
-      authenticatedUser?: {
-        userId: number;
-        role: Role;
-      };
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    authenticatedUser?: {
+      userId: number;
+      role: Role;
+    };
   }
 }
 

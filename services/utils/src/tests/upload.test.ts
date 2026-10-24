@@ -24,16 +24,18 @@ const { default: app } = await import("../app.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.uploadStream.mockImplementation((
-    _options: unknown,
-    callback: (error: null, result: { secure_url: string; public_id: string }) => void,
-  ) => {
-    callback(null, {
-      secure_url: "https://cdn.example/resumes/resume-123.pdf",
-      public_id: "resumes/resume-123",
-    });
-    return { end: vi.fn() };
-  });
+  mocks.uploadStream.mockImplementation(
+    (
+      _options: unknown,
+      callback: (error: null, result: { secure_url: string; public_id: string }) => void,
+    ) => {
+      callback(null, {
+        secure_url: "https://cdn.example/resumes/resume-123.pdf",
+        public_id: "resumes/resume-123",
+      });
+      return { end: vi.fn() };
+    },
+  );
   mocks.destroy.mockResolvedValue({ result: "ok" });
 });
 
@@ -80,6 +82,19 @@ describe("internal upload API", () => {
       .expect(415);
   });
 
+  it("rejects file content that does not match its declared PDF type", async () => {
+    await request(app)
+      .post("/api/utils/upload")
+      .set("x-internal-key", validKey)
+      .attach("file", Buffer.from("not actually a PDF"), {
+        filename: "resume.pdf",
+        contentType: "application/pdf",
+      })
+      .field("folder", "resumes")
+      .expect(415);
+    expect(mocks.uploadStream).not.toHaveBeenCalled();
+  });
+
   it("rejects files larger than five megabytes", async () => {
     await request(app)
       .post("/api/utils/upload")
@@ -90,6 +105,22 @@ describe("internal upload API", () => {
       })
       .field("folder", "resumes")
       .expect(413);
+  });
+
+  it("returns a client error when multipart uses an unexpected file field", async () => {
+    await request(app)
+      .post("/api/utils/upload")
+      .set("x-internal-key", validKey)
+      .attach("resume", Buffer.from("%PDF-1.7"), {
+        filename: "resume.pdf",
+        contentType: "application/pdf",
+      })
+      .field("folder", "resumes")
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message).toBe("Invalid multipart upload");
+      });
+    expect(mocks.uploadStream).not.toHaveBeenCalled();
   });
 
   it("rejects folders outside the allowlist", async () => {

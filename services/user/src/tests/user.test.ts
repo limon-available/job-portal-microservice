@@ -150,17 +150,7 @@ describe("user profile API", () => {
       });
   });
 
-  it("validates file uploads and forwards to the requested asset folder", async () => {
-    await request(app)
-      .put("/api/user/profile/picture")
-      .set(gatewayHeaders)
-      .attach("file", Buffer.from("not an image"), {
-        filename: "avatar.pdf",
-        contentType: "application/pdf",
-      })
-      .expect(415);
-    expect(mocks.replaceProfileAsset).not.toHaveBeenCalled();
-
+  it("parses multipart file uploads and forwards the file to the asset service", async () => {
     await request(app)
       .put("/api/user/profile/picture")
       .set(gatewayHeaders)
@@ -174,6 +164,21 @@ describe("user profile API", () => {
       "avatars",
       expect.objectContaining({ originalname: "avatar.png" }),
     );
+  });
+
+  it("returns a client error when a multipart upload uses the wrong file field", async () => {
+    await request(app)
+      .put("/api/user/profile/resume")
+      .set(gatewayHeaders)
+      .attach("resume", Buffer.from("%PDF-1.7"), {
+        filename: "resume.pdf",
+        contentType: "application/pdf",
+      })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message).toBe("Invalid multipart upload");
+      });
+    expect(mocks.replaceProfileAsset).not.toHaveBeenCalled();
   });
 
   it("supports skill creation and removal", async () => {
@@ -195,20 +200,13 @@ describe("user profile API", () => {
   it("supports education and experience CRUD", async () => {
     await request(app).get("/api/user/education").set(gatewayHeaders).expect(200);
     const education = { institution: "Example U", degree: "BSc" };
-    await request(app)
-      .post("/api/user/education")
-      .set(gatewayHeaders)
-      .send(education)
-      .expect(201);
+    await request(app).post("/api/user/education").set(gatewayHeaders).send(education).expect(201);
     await request(app)
       .put("/api/user/education/4")
       .set(gatewayHeaders)
       .send({ institution: "Updated U" })
       .expect(200);
-    await request(app)
-      .delete("/api/user/education/4")
-      .set(gatewayHeaders)
-      .expect(200);
+    await request(app).delete("/api/user/education/4").set(gatewayHeaders).expect(200);
 
     await request(app).get("/api/user/experience").set(gatewayHeaders).expect(200);
     await request(app)
@@ -221,10 +219,8 @@ describe("user profile API", () => {
       .set(gatewayHeaders)
       .send({ company: "Updated Co" })
       .expect(200);
-    await request(app)
-      .delete("/api/user/experience/5")
-      .set(gatewayHeaders)
-      .expect(200);
+    await request(app).delete("/api/user/experience/5").set(gatewayHeaders).expect(200);
+    await request(app).delete("/api/user/experience/5").set(gatewayHeaders).expect(200);
   });
 
   it("provides profile completion and saved-job operations", async () => {
@@ -240,10 +236,7 @@ describe("user profile API", () => {
       .set(gatewayHeaders)
       .send({ jobId: "job-100" })
       .expect(201);
-    await request(app)
-      .delete("/api/user/saved-jobs/job-100")
-      .set(gatewayHeaders)
-      .expect(200);
+    await request(app).delete("/api/user/saved-jobs/job-100").set(gatewayHeaders).expect(200);
   });
 
   it("serves OpenAPI documentation", async () => {

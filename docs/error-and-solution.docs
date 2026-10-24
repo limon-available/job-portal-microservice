@@ -43,6 +43,104 @@ CTA destination during server rendering. A valid logged-in role is sent to
 client hydration timing issues. The cookie is only a navigation hint: middleware
 continues to enforce role routing, while the gateway/API validate JWT access.
 
+4. Seeker profile and skills endpoints returned HTTP 500
+---------------------------------------------------------
+Reason:
+The user service logs show PostgreSQL error 42P01, `relation "profiles" does not
+exist`, from `ensureProfile`. Both GET /api/user/profile and GET /api/user/skills
+call this insert before reading profile or skill data. The production error
+handler correctly returns a generic 500 response while logging the detailed
+database error.
+
+Schema inspection of the database used by the running user container found job
+tables (`jobs`, `companies`, and related tables) and a `pgmigrations` ledger
+containing job migrations, but no `profiles` table or user migration record.
+The user schema is therefore absent from a database that appears to be shared
+with another service or is otherwise not the dedicated user database.
+
+Solution:
+Use the user service's own database, separate from auth/job databases, as
+required by the service ownership model. Verify the runtime DB_URL assignment
+for the user service without exposing its value, then apply its schema with
+`npm run migrate:up --workspace @hireheaven/user` in the environment configured
+for that dedicated database. Migration 001 in
+`services/user/migrations/001_user_profiles.js` creates profiles, skills,
+user_skills, and the other user-owned tables.
+
+Do not blindly rerun the migration against the database inspected here: the
+attempt stopped because a `skills` relation already exists, and it did not
+create the missing profiles table. No environment file was opened or modified;
+no database schema changes were made by the failed migration attempt.
+
+Follow-up confirmation:
+Running `npm run migrate:up --workspace @hireheaven/user` locally fails with
+PostgreSQL error 42P07, `relation "skills" already exists`. This confirms that
+the local migration command also reaches a database with pre-existing or
+mixed-service tables. The SSL mode warning and `Can't determine timestamp for
+001` are warnings; neither caused the migration failure. Do not drop or rename
+the existing `skills` table, and do not make migration 001 blindly ignore
+conflicts, because that could hide an incorrect database or an incompatible
+partial schema.
+
+Safe recovery:
+1. In the database provider, create or select a dedicated database for the
+   user service, separate from auth and job service databases.
+2. Set `DB_URL` for the user service to that database's connection string in
+   the user's local configuration. Keep the value private; do not paste it into
+   logs, chat, or source control.
+3. Verify the connection's database name and that its public schema does not
+   contain job-owned tables before applying migrations.
+4. Run `npm run migrate:up --workspace @hireheaven/user` again. Confirm that
+   migration `001_user_profiles` completes, then retry the profile and skills
+   requests.
+
+Migration safety:
+Migration `001_user_profiles.js` now checks for an existing user-owned table
+when `profiles` is absent and stops with an explicit diagnostic before creating
+tables. It intentionally does not use `CREATE TABLE IF NOT EXISTS` to skip a
+conflicting `skills` or `user_skills` table: those names are also used by Auth,
+and the existing `user_skills` table may reference Auth's `users` table rather
+than User's `profiles`. Silently reusing it would violate service database
+ownership and could attach profile skills to the wrong schema. This guard is
+not a substitute for configuring a dedicated user database; after correcting
+the database target, rerun the migration.
+
+5. Resume upload returned HTTP 500
+----------------------------------
+Reason:
+The application service does not receive resume files as multipart data; it
+accepts a `resumeUrl` when an application is submitted. The resume upload
+endpoint is `PUT /api/user/profile/resume`, which parses the multipart `file`
+field in the user service. That service first reads the previous asset from its
+own `profiles` table before forwarding the file to the internal utils service.
+The earlier database inspection recorded in section 4 found that this table
+was missing from the database used by the user service. PostgreSQL error
+42P01 (`relation "profiles" does not exist`) at that lookup therefore explains
+the 500 before Cloudinary is reached.
+
+The upload handlers restrict requests to one file up to 5 MB and check file
+extensions and declared MIME types. The utils service now also checks the
+content signature against the extension before storing the file. The user
+service forwards the in-memory file to utils over internal HTTP; utils requires
+the internal service key and streams the file to Cloudinary. The user service
+saves the resulting secure URL and Cloudinary public ID in its own profile
+row, cleans up the new upload if that persistence fails, and removes the old
+asset only after the profile update succeeds.
+
+Solution:
+Configure the user service to use its dedicated database and apply its schema
+there as described in section 4. Do not modify `.env` files or run the
+migration against the previously inspected mixed/incompatible database. After
+confirming `profiles` exists in the user service's database, retry the resume
+upload and verify the profile URL and asset ID were saved.
+
+Separately, malformed multipart requests (for example, using a file field
+other than `file`) were being treated as unexpected server errors by the
+service-level error handlers. These Multer errors now return HTTP 400, while
+the existing file-size limit remains HTTP 413. This reports client mistakes
+without masking genuine storage or database failures, which remain server
+errors and are logged.
+
 Verification
 ------------
 - npm.cmd run test --workspace @hireheaven/job - passed, 19 tests.
@@ -51,4 +149,75 @@ Verification
 - ESLint on the changed job-search files - passed.
 - npm.cmd run typecheck --workspace @hireheaven/web - passed.
 - ESLint on apps/web/src/app/(public)/page.tsx - passed.
+- User-service logs and database catalog inspection confirmed the missing
+  profiles relation and user-schema migration mismatch.
+- Both the container and local migration attempts failed at the existing
+  skills relation (PostgreSQL 42P07); no migration completed and no schema
+  changes were made by these failed attempts.
+- The migration preflight passes JavaScript syntax, ESLint, and a registration
+  check confirming the guard is queued before table creation.
+- `npm.cmd run test --workspace @hireheaven/user -- src/tests/user.test.ts
+  src/tests/assetUpload.test.ts` - passed, 14 tests.
+- `npm.cmd run test --workspace @hireheaven/utils -- src/tests/upload.test.ts` -
+  passed, 11 tests.
+- `npm.cmd run typecheck --workspace @hireheaven/user` - passed.
+- `npm.cmd run typecheck --workspace @hireheaven/utils` - passed.
+- Focused ESLint on all modified TypeScript files - passed.
+- User-service full lint remains blocked by the existing
+  `@typescript-eslint/no-namespace` violation in `src/middleware/isAuth.ts`.
 - On Windows PowerShell, npm.cmd avoids execution-policy failures loading npm.ps1.
+
+Resume upload returns HTTP 500
+==============================
+
+Symptom
+-------
+Uploading a resume to `PUT /api/user/profile/resume` returns:
+
+```json
+{"success":false,"message":"Internal server error","data":null}
+```
+
+Cause
+-----
+The generic response hides the underlying database error. The user service
+looks up the existing resume asset in its own `profiles` table before it
+forwards the file to the utils service or Cloudinary. The recorded user-service
+database error is PostgreSQL 42P01: `relation "profiles" does not exist`.
+Database inspection also found tables belonging to another service and no
+completed user-profile migration. This indicates that the user service is
+connected to a database without its required schema, rather than a failure in
+the Cloudinary upload.
+
+The relevant request path is:
+
+1. `PUT /api/user/profile/resume` parses a multipart field named `file`.
+2. The user service reads the previous resume asset from `profiles`.
+3. Only after that lookup does it call the internal utils upload endpoint.
+
+Consequently, a missing `profiles` table fails before the file reaches the
+utils service.
+
+Solution
+--------
+1. Select or create a PostgreSQL database dedicated to the user service. Each
+   service must use and manage its own database.
+2. Verify the database selected by the running user service without exposing
+   its connection string. Confirm it is the intended user database and does
+   not contain conflicting tables owned by another service.
+3. Apply the user-service migrations to that verified database:
+
+   ```powershell
+   npm run migrate:up --workspace @hireheaven/user
+   ```
+
+4. Confirm migration `001_user_profiles` completes and that the user-owned
+   `profiles` table exists. Then retry the upload with a supported resume file
+   sent in the multipart `file` field.
+
+Do not blindly rerun the migration against a mixed or partially populated
+database. The recorded attempt stopped because a `skills` table already
+existed; do not drop or rename that table, or change the migration to silently
+skip conflicting tables. Correct the user service's database target first,
+then migrate that dedicated database. Keep database credentials private and
+do not include them in logs or documentation.

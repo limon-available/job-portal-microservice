@@ -32,6 +32,33 @@ const upload = multer({
     callback(null, true);
   },
 });
+const hasExpectedSignature = (file: Express.Multer.File): boolean => {
+  const extension = file.originalname.slice(file.originalname.lastIndexOf(".")).toLowerCase();
+  const buffer = file.buffer;
+  switch (extension) {
+    case ".pdf":
+      return buffer.indexOf("%PDF-") >= 0 && buffer.indexOf("%PDF-") < 1024;
+    case ".doc":
+      return buffer
+        .subarray(0, 8)
+        .equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+    case ".docx":
+      return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    case ".png":
+      return buffer
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case ".jpg":
+    case ".jpeg":
+      return buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
+    case ".webp":
+      return (
+        buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP"
+      );
+    default:
+      return false;
+  }
+};
 const folders = new Set(["resumes", "avatars", "logos"]);
 
 const requireInternalKey: express.RequestHandler = (req, _res, next) => {
@@ -59,6 +86,9 @@ router.post("/upload", requireInternalKey, upload.single("file"), async (req, re
     const file = req.file;
     if (!file) {
       throw new AppError(400, "file is required");
+    }
+    if (!hasExpectedSignature(file)) {
+      throw new AppError(415, "File content does not match its extension");
     }
     const folder = typeof req.body.folder === "string" ? req.body.folder : "";
     if (!folders.has(folder)) {

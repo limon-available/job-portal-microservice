@@ -87,11 +87,16 @@ describe("profile asset replacement", () => {
   });
 
   it("rejects a resume file type that is not supported before uploading", async () => {
-    await expect(replaceProfileAsset(
-      73,
-      "resumes",
-      uploadedFile("resume.png", "image/png"),
-    )).rejects.toMatchObject({ statusCode: 415 });
+    await expect(
+      replaceProfileAsset(73, "resumes", uploadedFile("resume.png", "image/png")),
+    ).rejects.toMatchObject({ statusCode: 415 });
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+
+  it("rejects a profile picture file type that is not supported before uploading", async () => {
+    await expect(
+      replaceProfileAsset(73, "avatars", uploadedFile("avatar.pdf", "application/pdf")),
+    ).rejects.toMatchObject({ statusCode: 415 });
     expect(mocks.post).not.toHaveBeenCalled();
   });
 });

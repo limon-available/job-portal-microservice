@@ -1,4 +1,22 @@
 export const up = (pgm) => {
+  pgm.sql(`
+    DO $$
+    BEGIN
+      IF to_regclass('public.profiles') IS NULL AND (
+        to_regclass('public.skills') IS NOT NULL OR
+        to_regclass('public.user_skills') IS NOT NULL OR
+        to_regclass('public.education') IS NOT NULL OR
+        to_regclass('public.experience') IS NOT NULL OR
+        to_regclass('public.saved_jobs') IS NOT NULL
+      ) THEN
+        RAISE EXCEPTION USING
+          ERRCODE = '55000',
+          MESSAGE = 'User schema is partially present or this database is shared. Use a dedicated user-service database; do not skip conflicting tables with IF NOT EXISTS.';
+      END IF;
+    END
+    $$;
+  `);
+
   pgm.createTable("profiles", {
     user_id: { type: "integer", primaryKey: true },
     name: { type: "varchar(255)", notNull: true, default: "" },

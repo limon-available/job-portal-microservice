@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler } from "express";
 import express from "express";
 import cors from "cors";
+import multer from "multer";
 import { AppError, createLogger, createObservability } from "@hireheaven/shared";
 import routes from "./routes.js";
 
@@ -19,23 +20,24 @@ app.use(express.urlencoded({ limit: "5mb", extended: true }));
 app.use("/api/utils", routes);
 
 const errorHandler: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
-  const isUploadTooLarge = typeof error === "object" && error !== null &&
-    "code" in error && error.code === "LIMIT_FILE_SIZE";
+  const multerError = error instanceof multer.MulterError ? error : undefined;
+  const isUploadTooLarge = multerError?.code === "LIMIT_FILE_SIZE";
   const appError = error instanceof AppError ? error : undefined;
-  const statusCode = isUploadTooLarge ? 413 : appError?.statusCode ?? 500;
-  const isOperational = appError?.isOperational === true || isUploadTooLarge;
+  const statusCode = isUploadTooLarge ? 413 : multerError ? 400 : (appError?.statusCode ?? 500);
+  const isOperational = appError?.isOperational === true || Boolean(multerError);
   const message = isUploadTooLarge
     ? "File exceeds the 5MB upload limit"
-    : appError?.isOperational
-      ? appError.message
-      : "Internal server error";
+    : multerError
+      ? "Invalid multipart upload"
+      : appError?.isOperational
+        ? appError.message
+        : "Internal server error";
 
   logger.error({ err: error }, "utils request failed");
   res.status(statusCode).json({
     success: false,
-    message: process.env.NODE_ENV === "production" && !isOperational
-      ? "Internal server error"
-      : message,
+    message:
+      process.env.NODE_ENV === "production" && !isOperational ? "Internal server error" : message,
     data: null,
   });
 };

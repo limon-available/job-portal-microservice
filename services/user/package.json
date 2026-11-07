@@ -16,10 +16,10 @@
   "dependencies": {
     "@hireheaven/shared": "1.0.0",
     "@neondatabase/serverless": "^1.1.0",
-    "axios": "^1.16.1",
+    "axios": "^1.21.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "multer": "^2.1.1",
+    "multer": "^2.5.0",
     "node-pg-migrate": "^7.9.1",
     "pg": "^8.16.0",
     "swagger-ui-express": "^5.0.1",
